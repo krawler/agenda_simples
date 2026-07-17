@@ -447,7 +447,7 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     p = argparse.ArgumentParser(description="Servidor web da agenda simples.")
     p.add_argument("--port", type=int, default=8000)
-    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--host", default="0.0.0.0")
     args = p.parse_args()
     srv = ThreadingHTTPServer((args.host, args.port), Handler)
     print(f"Agenda web em http://{args.host}:{args.port}  (Ctrl+C para sair)")
