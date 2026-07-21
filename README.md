@@ -62,6 +62,44 @@ python server.py --port 8080
 > a página é servida por este mini servidor Python. HTMX, Tailwind e daisyUI são
 > só front-end e continuam exatamente como pedido.
 
+## Lembretes por e-mail (opcional)
+
+`notificador.py` envia um e-mail **30 minutos antes** de cada evento, com os
+detalhes do agendamento. Também é Python puro (stdlib `smtplib` + `email`) e usa
+o mesmo `eventos.json`.
+
+### Configuração
+
+Copie `.env.example` para `.env` e preencha (o `.env` fica fora do git):
+
+```
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=seu_email@gmail.com
+SMTP_PASSWORD=sua_senha_de_app
+SMTP_FROM=seu_email@gmail.com
+AGENDA_EMAIL_TO=destinatario@exemplo.com
+```
+
+> Gmail: gere uma **Senha de app** em https://myaccount.google.com/apppasswords
+> (a senha normal da conta não funciona via SMTP). Também dá para exportar as
+> variáveis no ambiente em vez de usar `.env`.
+
+### Uso
+
+```bash
+python notificador.py --test           # envia um e-mail de teste e sai
+python notificador.py --dry-run --once # mostra o e-mail que enviaria (não envia)
+python notificador.py                  # serviço: checa a cada 60s e envia
+python notificador.py --once           # checa uma vez e sai (Agendador/cron)
+```
+
+- **Modo serviço** (`python notificador.py`): deixe rodando; verifica a cada 60s.
+- **Modo `--once`**: ideal para agendar no **Agendador de Tarefas do Windows**
+  (ou cron) a cada 5–15 min — sem processo fixo em segundo plano.
+- Cada lembrete é enviado **uma única vez** (registro em `enviados.json`), mesmo
+  reiniciando o serviço. Eventos recorrentes recebem um lembrete por ocorrência.
+
 ## Notas
 
 - O beep usa `winsound.Beep` no Windows (som audível de verdade) e `\a` (BEL) em
