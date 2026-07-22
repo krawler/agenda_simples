@@ -22,6 +22,7 @@ Exemplos:
   python agenda.py rm 3
 """
 import argparse
+import calendar
 import json
 import sys
 from datetime import datetime, time, timedelta
@@ -100,6 +101,23 @@ def validar_until(until_str, inicio_dt):
             sys.exit(f"Erro: a data --until ({until_date}) não pode ser anterior à data de início ({inicio_dt.date()}).")
 
 
+def _ultimo_dia_mes(ano, mes):
+    """Retorna o último dia do mês (1-31)."""
+    return calendar.monthrange(ano, mes)[1]
+
+
+def _dia_efetivo_mensal(base_date, target_date):
+    """
+    Retorna o dia efetivo do mês para recorrência monthly.
+    Regra: se o dia base não existe no mês alvo, usa o último dia do mês.
+    """
+    base_day = base_date.day
+    target_year = target_date.year
+    target_month = target_date.month
+    ultimo_dia = _ultimo_dia_mes(target_year, target_month)
+    return base_day if base_day <= ultimo_dia else ultimo_dia
+
+
 # ------------------------------------------------------------------ recorrencia
 def ocorre_no_dia(e, dia):
     """Diz se o evento (single ou recorrente) acontece em `dia` (date)."""
@@ -121,7 +139,8 @@ def ocorre_no_dia(e, dia):
     if rep == "weekly":
         return (dia - base).days % 7 == 0
     if rep == "monthly":
-        return dia.day == base.day
+        dia_efetivo = _dia_efetivo_mensal(base, dia)
+        return dia.day == dia_efetivo
     return dia == base
 
 
