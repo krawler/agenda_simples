@@ -92,6 +92,14 @@ def beep():
         pass
 
 
+def validar_until(until_str, inicio_dt):
+    """Valida se a data 'until' não é anterior à data de início do evento."""
+    if until_str:
+        until_date = parse_data(until_str)
+        if until_date < inicio_dt.date():
+            sys.exit(f"Erro: a data --until ({until_date}) não pode ser anterior à data de início ({inicio_dt.date()}).")
+
+
 # ------------------------------------------------------------------ recorrencia
 def ocorre_no_dia(e, dia):
     """Diz se o evento (single ou recorrente) acontece em `dia` (date)."""
@@ -158,7 +166,8 @@ def cmd_new(args):
     inicio = parse_dt(args.at)
     until = args.until
     if until:
-        parse_data(until)  # valida
+        parse_data(until)  # valida formato
+        validar_until(until, inicio)  # valida contra data de início
     evento = {
         "id": proximo_id(eventos),
         "titulo": args.titulo,
@@ -180,10 +189,18 @@ def cmd_edit(args):
     if evento is None:
         sys.exit(f"Evento {args.id} nao encontrado.")
 
+    # Determina a nova data de início (se alterada) para validação do --until
+    novo_inicio = parse_dt(args.at) if args.at is not None else evento_inicio(evento)
+    novo_until = args.until if args.until is not None else evento.get("until")
+
+    # Valida --until contra a data de início (nova ou existente)
+    if novo_until is not None and novo_until not in ("", "none"):
+        validar_until(novo_until, novo_inicio)
+
     if args.titulo is not None:
         evento["titulo"] = args.titulo
     if args.at is not None:
-        evento["inicio"] = parse_dt(args.at).strftime(FMT)
+        evento["inicio"] = novo_inicio.strftime(FMT)
     if args.dur is not None:
         evento["dur"] = None if args.dur < 0 else args.dur
     if args.desc is not None:
