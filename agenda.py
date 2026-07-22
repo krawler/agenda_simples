@@ -5,8 +5,8 @@ Comandos:
   new    cria um evento (com recorrencia opcional)
   edit   edita campos de um evento existente
   list   lista eventos (dia atual, data informada, ou proximas N horas)
-  alerts mostra eventos que iniciam nos proximos 30 minutos
-  watch  monitora e avisa (com beep) eventos que iniciam em 30 minutos
+  alerts mostra eventos que iniciam nos proximos 60 minutos
+  watch  monitora e avisa (com beep) eventos que iniciam em 60, 30 e 15 minutos
   rm     remove um evento pelo id
 
 Exemplos:
@@ -35,7 +35,7 @@ if hasattr(sys.stdout, "reconfigure"):
 DB = Path(__file__).with_name("eventos.json")
 FMT = "%Y-%m-%d %H:%M"
 DATA_FMT = "%Y-%m-%d"
-ALERTA_MIN = 30
+ALERTAS_MIN = [60, 30, 15]  # 1h, 30min, 15min antes
 REPEATS = ("none", "daily", "weekdays", "weekly", "monthly")
 
 
@@ -257,32 +257,43 @@ def cmd_list(args):
 
 def cmd_alerts(args):
     agora = datetime.now()
-    janela = expandir(carregar(), agora, agora + timedelta(minutes=ALERTA_MIN))
+    max_min = max(ALERTAS_MIN)
+    janela = expandir(carregar(), agora, agora + timedelta(minutes=max_min))
     if not janela:
-        print(f"Nenhum evento nos proximos {ALERTA_MIN} minutos.")
+        print(f"Nenhum evento nos proximos {max_min} minutos.")
         return
-    print(f"⏰ Eventos iniciando nos proximos {ALERTA_MIN} minutos:")
+    print(f"⏰ Eventos iniciando nos proximos {max_min} minutos:")
     for occ, e in janela:
         faltam = int((occ - agora).total_seconds() // 60)
-        print(f"  [{e['id']}] {e['titulo']} em {faltam} min ({occ:%H:%M})")
+        # Determina qual alerta se aplica
+        alerta_tipo = ""
+        for am in ALERTAS_MIN:
+            if faltam <= am:
+                alerta_tipo = f" (alerta {am} min)"
+                break
+        print(f"  [{e['id']}] {e['titulo']} em {faltam} min ({occ:%H:%M}){alerta_tipo}")
 
 
 def cmd_watch(args):
     import time as _time
 
-    print(f"Monitorando eventos (alerta {ALERTA_MIN} min antes). Ctrl+C para sair.")
+    print(f"Monitorando eventos (alertas {', '.join(str(m) for m in ALERTAS_MIN)} min antes). Ctrl+C para sair.")
+    # Chave: (event_id, occ_isoformat, alerta_min)
     avisados = set()
     try:
         while True:
             agora = datetime.now()
-            for occ, e in expandir(carregar(), agora, agora + timedelta(minutes=ALERTA_MIN)):
-                chave = (e["id"], occ.isoformat())
-                if chave not in avisados:
-                    faltam = int((occ - agora).total_seconds() // 60)
-                    print(f"⏰ ALERTA: '{e['titulo']}' inicia em {faltam} min ({occ:%H:%M})",
-                          flush=True)
-                    beep()
-                    avisados.add(chave)
+            max_min = max(ALERTAS_MIN)
+            for occ, e in expandir(carregar(), agora, agora + timedelta(minutes=max_min)):
+                faltam = int((occ - agora).total_seconds() // 60)
+                for am in ALERTAS_MIN:
+                    if faltam <= am:
+                        chave = (e["id"], occ.isoformat(), am)
+                        if chave not in avisados:
+                            print(f"⏰ ALERTA {am} min: '{e['titulo']}' inicia em {faltam} min ({occ:%H:%M})",
+                                  flush=True)
+                            beep()
+                            avisados.add(chave)
             _time.sleep(args.interval)
     except KeyboardInterrupt:
         print("\nMonitoramento encerrado.")
@@ -328,10 +339,10 @@ def main():
                    help="proximas N horas (padrao 6 se sem valor)")
     l.set_defaults(func=cmd_list)
 
-    a = sub.add_parser("alerts", help="eventos nos proximos 30 min")
+    a = sub.add_parser("alerts", help="eventos nos proximos 60 min")
     a.set_defaults(func=cmd_alerts)
 
-    w = sub.add_parser("watch", help="monitora e avisa (beep) 30 min antes")
+    w = sub.add_parser("watch", help="monitora e avisa (beep) 60, 30 e 15 min antes")
     w.add_argument("--interval", type=int, default=60, help="segundos entre checagens")
     w.set_defaults(func=cmd_watch)
 
