@@ -8,6 +8,7 @@ Comandos:
   alerts mostra eventos que iniciam nos proximos 60 minutos
   watch  monitora e avisa (com beep) eventos que iniciam em 60, 30 e 15 minutos
   rm     remove um evento pelo id
+  sync   sincroniza eventos com Google Calendar
 
 Exemplos:
   python agenda.py new "Reuniao" --at "2026-07-01 15:00" --dur 60 --desc "com o time"
@@ -20,11 +21,13 @@ Exemplos:
   python agenda.py alerts
   python agenda.py watch
   python agenda.py rm 3
+  python agenda.py sync
 """
 import argparse
 import calendar
 import json
 import sys
+import os
 from datetime import datetime, time, timedelta
 from pathlib import Path
 
@@ -37,6 +40,24 @@ FMT = "%Y-%m-%d %H:%M"
 DATA_FMT = "%Y-%m-%d"
 ALERTAS_MIN = [60, 30, 15]  # 1h, 30min, 15min antes
 REPEATS = ("none", "daily", "weekdays", "weekly", "monthly")
+
+# Google Calendar integration
+GOOGLE_CREDENTIALS_FILE = Path(__file__).with_name("credentials.json")
+GOOGLE_TOKEN_FILE = Path(__file__).with_name("token.json")
+GOOGLE_CALENDAR_ID = "primary"  # Use 'primary' for the main calendar
+
+# Try to import Google Calendar libraries
+try:
+    from google.auth.transport.requests import Request
+    from google.oauth2.credentials import Credentials
+    from google_auth_oauthlib.flow import InstalledAppFlow
+    from googleapiclient.discovery import build
+    from googleapiclient.errors import HttpError
+    GOOGLE_AVAILABLE = True
+except ImportError:
+    GOOGLE_AVAILABLE = False
+
+SCOPES = ['https://www.googleapis.com/auth/calendar']
 
 
 # ---------------------------------------------------------------- persistencia
@@ -179,6 +200,280 @@ def formatar(e, ini):
     return linha
 
 
+# -------------------------------------------------------------- Google Calendar
+def get_google_service():
+    """Autentica e retorna o serviço do Google Calendar."""
+    if not GOOGLE_AVAILABLE:
+        sys.exit("Bibliotecas do Google Calendar não instaladas. Execute: pip install google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client")
+    
+    creds = None
+    if GOOGLE_TOKEN_FILE.exists():
+        creds = Credentials.from_authorized_user_file(str(GOOGLE_TOKEN_FILE), SCOPES)
+    
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            if not GOOGLE_CREDENTIALS_FILE.exists():
+                sys.exit(f"Arquivo de credenciais não encontrado: {GOOGLE_CREDENTIALS_FILE}. Baixe do Google Cloud Console.")
+            flow = InstalledAppFlow.from_client_secrets_file(str(GOOGLE_CREDENTIALS_FILE), SCOPES)
+            creds = flow.run_local_server(port=0)
+        GOOGLE_TOKEN_FILE.write_text(creds.to_json())
+    
+    return build('calendar', 'v3', credentials=creds)
+
+
+def event_to_google_event(e, occ):
+    """Converte evento local para formato do Google Calendar."""
+    inicio = occ
+    fim = inicio + timedelta(minutes=e["dur"]) if e.get("dur") else inicio + timedelta(hours=1)
+    
+    google_event = {
+        'summary': e["titulo"],
+        'start': {
+            'dateTime': inicio.isoformat(),
+            'timeZone': 'America/Sao_Paulo',
+        },
+        'end': {
+            'dateTime': fim.isoformat(),
+            'timeZone': 'America/Sao_Paulo',
+        },
+    }
+    
+    if e.get("desc"):
+        google_event['description'] = e["desc"]
+    
+    # Handle recurrence
+    if e.get("repeat") and e["repeat"] != "none":
+        rrule = []
+        rep = e["repeat"]
+        if rep == "daily":
+            rrule.append("RRULE:FREQ=DAILY")
+        elif rep == "weekdays":
+            rrule.append("RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR")
+        elif rep == "weekly":
+            rrule.append("RRULE:FREQ=WEEKLY")
+        elif rep == "monthly":
+            rrule.append("RRULE:FREQ=MONTHLY")
+        
+        if e.get("until"):
+            until_date = parse_data(e["until"])
+            rrule.append(f"UNTIL={until_date.strftime('%Y%m%d')}T235959Z")
+        
+        if rrule:
+            google_event['recurrence'] = rrule
+    
+    return google_event
+
+
+def sync_event_to_google(e, occ=None):
+    """Sincroniza um evento específico com o Google Calendar."""
+    try:
+        service = get_google_service()
+        
+        # Se não passou occ, usa a primeira ocorrência (para eventos recorrentes, cria a série)
+        if occ is None:
+            occ = evento_inicio(e)
+        
+        google_event = event_to_google_event(e, occ)
+        
+        # Se o evento já tem google_id, tenta atualizar
+        if e.get("google_id"):
+            try:
+                updated = service.events().update(
+                    calendarId=GOOGLE_CALENDAR_ID,
+                    eventId=e["google_id"],
+                    body=google_event
+                ).execute()
+                e["google_id"] = updated['id']
+                return True
+            except HttpError as error:
+                if error.resp.status == 404:
+                    # Evento não existe mais no Google, cria novo
+                    pass
+                else:
+                    raise
+        
+        # Cria novo evento
+        created = service.events().insert(
+            calendarId=GOOGLE_CALENDAR_ID,
+            body=google_event
+        ).execute()
+        e["google_id"] = created['id']
+        return True
+    except Exception as ex:
+        print(f"Erro ao sincronizar evento {e['id']} com Google Calendar: {ex}")
+        return False
+
+
+def delete_event_from_google(e):
+    """Remove evento do Google Calendar."""
+    if not e.get("google_id"):
+        return True
+    
+    try:
+        service = get_google_service()
+        service.events().delete(
+            calendarId=GOOGLE_CALENDAR_ID,
+            eventId=e["google_id"]
+        ).execute()
+        return True
+    except HttpError as error:
+        if error.resp.status == 404:
+            return True  # Já não existe
+        print(f"Erro ao remover evento {e['id']} do Google Calendar: {error}")
+        return False
+    except Exception as ex:
+        print(f"Erro ao remover evento {e['id']} do Google Calendar: {ex}")
+        return False
+
+
+def get_google_events(service, time_min=None, time_max=None):
+    """Busca eventos do Google Calendar."""
+    try:
+        events_result = service.events().list(
+            calendarId=GOOGLE_CALENDAR_ID,
+            timeMin=time_min.isoformat() + 'Z' if time_min else None,
+            timeMax=time_max.isoformat() + 'Z' if time_max else None,
+            singleEvents=True,
+            orderBy='startTime',
+            maxResults=2500
+        ).execute()
+        return events_result.get('items', [])
+    except Exception as ex:
+        print(f"Erro ao buscar eventos do Google Calendar: {ex}")
+        return []
+
+
+def find_local_event_by_google_id(eventos, google_id):
+    """Encontra evento local pelo google_id."""
+    for e in eventos:
+        if e.get("google_id") == google_id:
+            return e
+    return None
+
+
+def sync_all_to_google():
+    """Sincroniza todos os eventos locais para o Google Calendar."""
+    if not GOOGLE_AVAILABLE:
+        print("Bibliotecas do Google Calendar não instaladas.")
+        return False
+    
+    eventos = carregar()
+    service = get_google_service()
+    
+    # Busca eventos existentes no Google para evitar duplicatas
+    google_events = get_google_events(service)
+    google_ids = {ge['id'] for ge in google_events}
+    
+    synced = 0
+    errors = 0
+    
+    for e in eventos:
+        if e.get("google_id") and e["google_id"] in google_ids:
+            # Já existe, atualiza
+            if sync_event_to_google(e):
+                synced += 1
+            else:
+                errors += 1
+        elif not e.get("google_id"):
+            # Novo evento, cria
+            if sync_event_to_google(e):
+                synced += 1
+            else:
+                errors += 1
+    
+    if synced > 0 or errors > 0:
+        salvar(eventos)
+    
+    print(f"Sincronização concluída: {synced} eventos sincronizados, {errors} erros.")
+    return errors == 0
+
+
+def sync_from_google():
+    """Busca eventos do Google Calendar que não estão na agenda local e adiciona."""
+    if not GOOGLE_AVAILABLE:
+        print("Bibliotecas do Google Calendar não instaladas.")
+        return False
+    
+    eventos = carregar()
+    service = get_google_service()
+    
+    # Busca eventos do Google dos últimos 2 anos até 2 anos no futuro
+    time_min = datetime.now() - timedelta(days=730)
+    time_max = datetime.now() + timedelta(days=730)
+    
+    google_events = get_google_events(service, time_min, time_max)
+    
+    added = 0
+    for ge in google_events:
+        if find_local_event_by_google_id(eventos, ge['id']):
+            continue  # Já existe localmente
+        
+        # Converte evento do Google para formato local
+        start = ge['start'].get('dateTime', ge['start'].get('date'))
+        end = ge['end'].get('dateTime', ge['end'].get('date'))
+        
+        try:
+            if 'T' in start:
+                inicio_dt = datetime.fromisoformat(start.replace('Z', '+00:00'))
+            else:
+                inicio_dt = datetime.fromisoformat(start + 'T00:00:00')
+            
+            if 'T' in end:
+                fim_dt = datetime.fromisoformat(end.replace('Z', '+00:00'))
+            else:
+                fim_dt = datetime.fromisoformat(end + 'T23:59:59')
+            
+            dur = int((fim_dt - inicio_dt).total_seconds() / 60)
+            
+            # Detecta recorrência
+            repeat = None
+            until = None
+            if 'recurrence' in ge:
+                for rule in ge['recurrence']:
+                    if rule.startswith('RRULE:'):
+                        rrule = rule[6:]
+                        if 'FREQ=DAILY' in rrule and 'BYDAY' not in rrule:
+                            repeat = 'daily'
+                        elif 'FREQ=WEEKLY' in rrule and 'BYDAY=MO,TU,WE,TH,FR' in rrule:
+                            repeat = 'weekdays'
+                        elif 'FREQ=WEEKLY' in rrule:
+                            repeat = 'weekly'
+                        elif 'FREQ=MONTHLY' in rrule:
+                            repeat = 'monthly'
+                        
+                        if 'UNTIL=' in rrule:
+                            until_str = rrule.split('UNTIL=')[1].split(';')[0]
+                            try:
+                                until = datetime.strptime(until_str, '%Y%m%dT%H%M%SZ').date().isoformat()
+                            except:
+                                pass
+            
+            evento = {
+                "id": proximo_id(eventos),
+                "titulo": ge.get('summary', 'Sem título'),
+                "inicio": inicio_dt.strftime(FMT),
+                "dur": dur if dur > 0 else None,
+                "desc": ge.get('description'),
+                "repeat": repeat,
+                "until": until,
+                "google_id": ge['id']
+            }
+            eventos.append(evento)
+            added += 1
+        except Exception as ex:
+            print(f"Erro ao converter evento do Google: {ex}")
+    
+    if added > 0:
+        salvar(eventos)
+        print(f"{added} eventos importados do Google Calendar.")
+    else:
+        print("Nenhum evento novo para importar do Google Calendar.")
+    
+    return True
+
+
 # -------------------------------------------------------------------- comandos
 def cmd_new(args):
     eventos = carregar()
@@ -200,6 +495,14 @@ def cmd_new(args):
     salvar(eventos)
     print(f"Evento criado: [{evento['id']}] {evento['titulo']} em {evento['inicio']}"
           + (f" (repete {evento['repeat']})" if evento["repeat"] else ""))
+    
+    # Sincroniza com Google Calendar se disponível
+    if GOOGLE_AVAILABLE and GOOGLE_CREDENTIALS_FILE.exists():
+        if sync_event_to_google(evento):
+            salvar(eventos)
+            print("Evento sincronizado com Google Calendar.")
+        else:
+            print("Aviso: evento criado localmente, mas falha ao sincronizar com Google Calendar.")
 
 
 def cmd_edit(args):
@@ -232,6 +535,14 @@ def cmd_edit(args):
     salvar(eventos)
     print(f"Evento {args.id} atualizado.")
     print(formatar(evento, evento_inicio(evento)))
+    
+    # Sincroniza com Google Calendar se disponível
+    if GOOGLE_AVAILABLE and GOOGLE_CREDENTIALS_FILE.exists():
+        if sync_event_to_google(evento):
+            salvar(eventos)
+            print("Evento sincronizado com Google Calendar.")
+        else:
+            print("Aviso: evento atualizado localmente, mas falha ao sincronizar com Google Calendar.")
 
 
 def cmd_list(args):
@@ -301,11 +612,38 @@ def cmd_watch(args):
 
 def cmd_rm(args):
     eventos = carregar()
-    novos = [e for e in eventos if e["id"] != args.id]
-    if len(novos) == len(eventos):
+    evento = next((e for e in eventos if e["id"] == args.id), None)
+    if evento is None:
         sys.exit(f"Evento {args.id} nao encontrado.")
+    
+    # Remove do Google Calendar primeiro
+    if GOOGLE_AVAILABLE and GOOGLE_CREDENTIALS_FILE.exists() and evento.get("google_id"):
+        delete_event_from_google(evento)
+    
+    novos = [e for e in eventos if e["id"] != args.id]
     salvar(novos)
     print(f"Evento {args.id} removido.")
+
+
+def cmd_sync(args):
+    """Sincroniza eventos com Google Calendar (bidirecional)."""
+    if not GOOGLE_AVAILABLE:
+        sys.exit("Bibliotecas do Google Calendar não instaladas. Execute: pip install google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client")
+    
+    if not GOOGLE_CREDENTIALS_FILE.exists():
+        sys.exit(f"Arquivo de credenciais não encontrado: {GOOGLE_CREDENTIALS_FILE}. Baixe do Google Cloud Console.")
+    
+    print("Sincronizando com Google Calendar...")
+    
+    # Primeiro: envia eventos locais para o Google
+    print("Enviando eventos locais para Google Calendar...")
+    sync_all_to_google()
+    
+    # Segundo: busca eventos do Google que não estão localmente
+    print("Buscando eventos do Google Calendar não presentes localmente...")
+    sync_from_google()
+    
+    print("Sincronização concluída.")
 
 
 # ------------------------------------------------------------------------ main
@@ -349,6 +687,9 @@ def main():
     r = sub.add_parser("rm", help="remove um evento")
     r.add_argument("id", type=int)
     r.set_defaults(func=cmd_rm)
+
+    s = sub.add_parser("sync", help="sincroniza eventos com Google Calendar")
+    s.set_defaults(func=cmd_sync)
 
     args = p.parse_args()
     args.func(args)

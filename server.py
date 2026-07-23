@@ -15,6 +15,8 @@ Tailwind e daisyUI (que sao apenas front-end).
 import argparse
 import calendar as calmod
 import html
+import json
+import threading
 from datetime import date, datetime, time, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
@@ -110,6 +112,8 @@ def render_evento_item(occ, e):
     if e.get("repeat"):
         badges += (f'<span class="badge badge-sm badge-outline">'
                    f'{esc(e["repeat"])}</span>')
+    if e.get("google_id"):
+        badges += '<span class="badge badge-sm badge-success">☁</span>'
     desc = (f'<div class="text-sm opacity-70">{esc(e["desc"])}</div>'
             if e.get("desc") else "")
     iso = occ.date().isoformat()
@@ -251,6 +255,25 @@ def render_alerts_banner():
             f'<span class="font-semibold">Próximos 30 min:</span>{linhas}</div></div>')
 
 
+def render_sync_status(status_msg="", is_loading=False):
+    """Renderiza o status da sincronização."""
+    if is_loading:
+        return f'''<div id="sync-status" class="alert alert-info shadow-sm" hx-ext="ws">
+  <div class="flex items-center gap-2">
+    <span class="loading loading-spinner loading-sm"></span>
+    <span>Sincronizando com Google Calendar...</span>
+  </div>
+</div>'''
+    elif status_msg:
+        alert_class = "alert-success" if "sucesso" in status_msg.lower() or "conclu" in status_msg.lower() else "alert-error"
+        return f'''<div id="sync-status" class="alert {alert_class} shadow-sm">
+  <div class="flex items-center gap-2">
+    <span>{esc(status_msg)}</span>
+  </div>
+</div>'''
+    return '<div id="sync-status"></div>'
+
+
 def render_page(sel):
     return f'''<!DOCTYPE html>
 <html lang="pt-br" data-theme="light">
@@ -289,9 +312,13 @@ def render_page(sel):
         </select>
         <button class="btn btn-sm btn-ghost" hx-get="/alerts" hx-target="#alerts"
           hx-swap="outerHTML">Atualizar alertas</button>
+        <button class="btn btn-sm btn-primary" hx-post="/sync" hx-target="#sync-status"
+          hx-swap="outerHTML" hx-indicator="#sync-indicator">☁ Sincronizar Google</button>
+        <span id="sync-indicator" class="loading loading-spinner loading-sm htmx-indicator"></span>
       </div>
     </div>
     {render_alerts_banner()}
+    {render_sync_status()}
     <div class="grid md:grid-cols-2 gap-4 items-start">
       {render_calendar(sel.year, sel.month, sel)}
       {render_day_panel(sel)}
@@ -364,6 +391,8 @@ class Handler(BaseHTTPRequestHandler):
             self._remover_evento(q)
         elif u.path == "/skip":
             self._pular_ocorrencia(q)
+        elif u.path == "/sync":
+            self._sincronizar_google()
         else:
             self._send("<h1>404</h1>", 404)
 
@@ -416,6 +445,14 @@ class Handler(BaseHTTPRequestHandler):
 
     def _remover_evento(self, q):
         eid = int(q.get("id", ["0"])[0])
+        eventos = agenda.carregar()
+        evento = next((x for x in eventos if x["id"] == eid), None)
+        if evento and agenda.GOOGLE_AVAILABLE and evento.get("google_id"):
+            # Tenta remover do Google Calendar
+            try:
+                agenda.delete_event_from_google(evento)
+            except:
+                pass
         eventos = [e for e in agenda.carregar() if e["id"] != eid]
         agenda.salvar(eventos)
         painel = self._parse_date(q.get("date", [""])[0])
@@ -432,6 +469,36 @@ class Handler(BaseHTTPRequestHandler):
             e["except"] = sorted(excecoes)
             agenda.salvar(eventos)
         self._responder_com_calendario(self._parse_date(q.get("date", [""])[0]))
+
+    def _sincronizar_google(self):
+        """Endpoint para sincronizar com Google Calendar."""
+        if not agenda.GOOGLE_AVAILABLE:
+            self._send(render_sync_status("Bibliotecas do Google Calendar não instaladas. Execute: pip install google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client"))
+            return
+        
+        if not agenda.GOOGLE_CREDENTIALS_FILE.exists():
+            self._send(render_sync_status("Arquivo credentials.json não encontrado. Configure no Google Cloud Console."))
+            return
+        
+        # Mostra loading
+        self._send(render_sync_status("", is_loading=True))
+        
+        # Executa sincronização em thread separada para não bloquear
+        def do_sync():
+            try:
+                # Envia eventos locais para o Google
+                agenda.sync_all_to_google()
+                # Busca eventos do Google que não estão localmente
+                agenda.sync_from_google()
+                msg = "Sincronização concluída com sucesso!"
+            except Exception as ex:
+                msg = f"Erro na sincronização: {str(ex)}"
+            
+            # Atualiza o status via HTMX (precisa de uma forma de notificar o cliente)
+            # Como estamos em thread separada, vamos apenas logar
+            print(f"[SYNC] {msg}")
+        
+        threading.Thread(target=do_sync, daemon=True).start()
 
     def _responder_com_calendario(self, painel):
         # painel do dia (target) + calendario via swap-oob para atualizar os pontos
