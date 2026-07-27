@@ -3,7 +3,7 @@
 
 Envia:
   • E-mail 60 minutos (1 hora) antes de cada evento (via SMTP)
-  • Mensagem Telegram 90 minutos (1h30) antes (via API do bot)
+  • Mensagem Telegram 60 minutos (1 hora) antes (via API do bot)
 
 Reaproveita a lógica do agenda.py e usa apenas stdlib (smtplib, email, urllib).
 
@@ -43,7 +43,7 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
 ALERTA_EMAIL = 60       # minutos (1 hora)
-ALERTA_TELEGRAM = 30    # minutos (1h30)
+ALERTA_TELEGRAM = ALERTA_EMAIL  # mesma frequência que o e‑mail
 ENVIADOS = Path(__file__).with_name("enviados.json")
 
 
@@ -177,7 +177,7 @@ def enviar_telegram(titulo, mensagem, cfg):
 
 # ------------------------------------------------------------------ processo
 def processar(cfg, dry_run=False):
-    """Checa e envia lembretes de email (60min) e Telegram (90min)."""
+    """Checa e envia lembretes de email (60min) e Telegram (60min)."""
     agora = datetime.now()
     enviados = carregar_enviados()
     novos = 0
@@ -203,7 +203,7 @@ def processar(cfg, dry_run=False):
             enviados.add(chave)
             novos += 1
 
-    # Telegram: 90 minutos (1h30) antes
+    # Telegram: 60 minutos (1 hora) antes (mesma frequência que e‑mail)
     if "telegram" in cfg:
         janela_tg = agenda.expandir(agenda.carregar(), agora,
                                     agora + timedelta(minutes=ALERTA_TELEGRAM))
@@ -211,13 +211,14 @@ def processar(cfg, dry_run=False):
             chave = f"telegram|{e['id']}|{occ.isoformat()}"
             if chave in enviados:
                 continue
-            msg = f"⏰ {e['titulo']} às {occ:%H:%M}\n\n{montar_mensagem(e, occ)}"
+            # Usa exatamente o mesmo conteúdo que o e‑mail
+            mensagem = montar_mensagem(e, occ)
             if dry_run:
                 print("---- (dry-run) Telegram que seria enviado ----------")
                 print(f"Chat: {cfg['telegram']['chat_id']}\n")
-                print(msg)
+                print(mensagem)
             else:
-                if enviar_telegram(e['titulo'], msg, cfg["telegram"]):
+                if enviar_telegram(e['titulo'], mensagem, cfg["telegram"]):
                     print(f"[{agora:%H:%M}] Telegram: '{e['titulo']}' → "
                           f"{cfg['telegram']['chat_id']} ({occ:%H:%M})")
                     enviados.add(chave)
