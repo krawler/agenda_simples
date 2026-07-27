@@ -62,6 +62,22 @@ def carregar_env(caminho):
         os.environ.setdefault(chave.strip(), valor.strip().strip('"').strip("'"))
 
 
+def validar_config_email(cfg):
+    """Valida que todas as chaves necessárias do e‑mail estão presentes."""
+    required = ["host", "port", "user", "password", "from", "to"]
+    missing = [k for k in required if not cfg.get(k)]
+    if missing:
+        sys.exit(f"Configuração de e‑mail incompleta: faltam {', '.join(missing)}")
+
+
+def validar_config_telegram(cfg):
+    """Valida que token e chat_id do Telegram estão presentes."""
+    if not cfg.get("token"):
+        sys.exit("Configuração do Telegram incompleta: faltando TELEGRAM_BOT_TOKEN")
+    if not cfg.get("chat_id"):
+        sys.exit("Configuração do Telegram incompleta: faltando TELEGRAM_CHAT_ID")
+
+
 def carregar_config():
     """Carrega e valida a config. Email e Telegram sao opcionais (nao bloqueantes)."""
     config = {}
@@ -80,6 +96,7 @@ def carregar_config():
             "from": os.environ.get("SMTP_FROM") or user,
             "to": to,
         }
+        validar_config_email(config["email"])
 
     # Telegram (opcional)
     tg_token = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -89,6 +106,7 @@ def carregar_config():
             "token": tg_token,
             "chat_id": tg_chat,
         }
+        validar_config_telegram(config["telegram"])
 
     if not config:
         sys.exit("Nenhum serviço de notificacao configurado.\n"
@@ -157,15 +175,19 @@ def montar_email(e, occ, cfg):
 def enviar_email(msg, cfg):
     import smtplib
 
-    if cfg["port"] == 465:
-        with smtplib.SMTP_SSL(cfg["host"], cfg["port"], timeout=30) as s:
-            s.login(cfg["user"], cfg["password"])
-            s.send_message(msg)
-    else:
-        with smtplib.SMTP(cfg["host"], cfg["port"], timeout=30) as s:
-            s.starttls()
-            s.login(cfg["user"], cfg["password"])
-            s.send_message(msg)
+    try:
+        if cfg["port"] == 465:
+            with smtplib.SMTP_SSL(cfg["host"], cfg["port"], timeout=30) as s:
+                s.login(cfg["user"], cfg["password"])
+                s.send_message(msg)
+        else:
+            with smtplib.SMTP(cfg["host"], cfg["port"], timeout=30) as s:
+                s.starttls()
+                s.login(cfg["user"], cfg["password"])
+                s.send_message(msg)
+    except smtplib.SMTPException as ex:
+        print(f"[erro SMTP] {ex}", file=sys.stderr)
+        raise
 
 
 # ------------------------------------------------------------------ telegram
@@ -205,9 +227,12 @@ def processar(cfg, dry_run=False):
                 print(f"Subject: {msg['Subject']}\n")
                 print(msg.get_content())
             else:
-                enviar_email(msg, cfg["email"])
-                print(f"[{agora:%H:%M}] E-mail: '{e['titulo']}' → "
-                      f"{msg['To']} ({occ:%H:%M})")
+                try:
+                    enviar_email(msg, cfg["email"])
+                    print(f"[{agora:%H:%M}] E-mail: '{e['titulo']}' → "
+                          f"{msg['To']} ({occ:%H:%M})")
+                except Exception:
+                    print(f"[erro] Falha ao enviar e‑mail para {msg['To']}.", file=sys.stderr)
             enviados_email.add(chave)
             novos += 1
 
@@ -232,8 +257,8 @@ def processar(cfg, dry_run=False):
                     enviados_telegram.add(chave)
                     novos += 1
                 else:
-                    # falha: nao marca como enviado, sera retentado
-                    pass
+                    print(f"[erro] Falha ao enviar mensagem Telegram para "
+                          f"{cfg['telegram']['chat_id']}.", file=sys.stderr)
 
     if not dry_run:
         if "email" in cfg:
@@ -272,8 +297,11 @@ def main():
         msg["To"] = args.test or cfg["email"]["to"]
         msg.set_content("E-mail de teste do serviço de lembretes da Agenda Simples.\n"
                         "Se você recebeu, o SMTP está configurado corretamente.")
-        enviar_email(msg, cfg["email"])
-        print(f"E-mail de teste enviado para {msg['To']}.")
+        try:
+            enviar_email(msg, cfg["email"])
+            print(f"E-mail de teste enviado para {msg['To']}.")
+        except Exception:
+            print("Falha ao enviar e‑mail de teste.", file=sys.stderr)
         return
 
     if args.test_tg:
@@ -282,8 +310,10 @@ def main():
         msg = ("✅ Teste — Agenda Simples\n\n"
                "Mensagem de teste do serviço de lembretes.\n"
                "Se você recebeu, o Telegram está configurado corretamente.")
-        enviar_telegram("Teste", msg, cfg["telegram"])
-        print(f"Mensagem Telegram enviada para {cfg['telegram']['chat_id']}.")
+        if enviar_telegram("Teste", msg, cfg["telegram"]):
+            print(f"Mensagem Telegram enviada para {cfg['telegram']['chat_id']}.")
+        else:
+            print("Falha ao enviar mensagem Telegram de teste.", file=sys.stderr)
         return
 
     if args.once:
