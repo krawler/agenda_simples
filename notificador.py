@@ -43,7 +43,7 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
 ALERTA_EMAIL = 60       # minutos (1 hora)
-ALERTA_TELEGRAM = 90    # minutos (1h30)
+ALERTA_TELEGRAM = 30    # minutos (1h30)
 ENVIADOS = Path(__file__).with_name("enviados.json")
 
 
