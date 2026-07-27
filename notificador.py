@@ -2,7 +2,7 @@
 """Serviço de lembretes (e-mail + Telegram) da agenda simples.
 
 Envia:
-  • E-mail 30 minutos antes de cada evento (via SMTP)
+  • E-mail 60 minutos (1 hora) antes de cada evento (via SMTP)
   • Mensagem Telegram 90 minutos (1h30) antes (via API do bot)
 
 Reaproveita a lógica do agenda.py e usa apenas stdlib (smtplib, email, urllib).
@@ -42,8 +42,8 @@ import agenda  # reaproveita carregar()/expandir()/ALERTA_MIN
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
-ALERTA_EMAIL = 30       # minutos
-ALERTA_TELEGRAM = 90    # minutos
+ALERTA_EMAIL = 60       # minutos (1 hora)
+ALERTA_TELEGRAM = 90    # minutos (1h30)
 ENVIADOS = Path(__file__).with_name("enviados.json")
 
 
@@ -177,12 +177,12 @@ def enviar_telegram(titulo, mensagem, cfg):
 
 # ------------------------------------------------------------------ processo
 def processar(cfg, dry_run=False):
-    """Checa e envia lembretes de email (30min) e Telegram (90min)."""
+    """Checa e envia lembretes de email (60min) e Telegram (90min)."""
     agora = datetime.now()
     enviados = carregar_enviados()
     novos = 0
 
-    # E-mail: 30 minutos antes
+    # E-mail: 60 minutos (1 hora) antes
     if "email" in cfg:
         janela_email = agenda.expandir(agenda.carregar(), agora,
                                        agora + timedelta(minutes=ALERTA_EMAIL))
