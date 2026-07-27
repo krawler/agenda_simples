@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Serviço de lembretes por e-mail da agenda simples.
 
-Envia um e-mail 30 minutos antes de cada evento, com os detalhes do
+Envia um e-mail 1 hora antes de cada evento, com os detalhes do
 agendamento. Reaproveita a lógica do agenda.py e usa apenas a stdlib
 (smtplib + email).
 
@@ -137,7 +137,7 @@ def enviar(msg, cfg):
 
 # ------------------------------------------------------------------ processo
 def processar(cfg, dry_run=False):
-    """Uma passada: envia lembrete dos eventos que entram na janela de 30 min."""
+    """Uma passada: envia lembrete dos eventos que entram na janela de 1 hora."""
     agora = datetime.now()
     janela = agenda.expandir(agenda.carregar(), agora,
                              agora + timedelta(minutes=ALERTA_MIN))
@@ -200,7 +200,7 @@ def main():
         print(f"{n} lembrete(s) processado(s).")
         return
 
-    print(f"Serviço de lembretes ativo (30 min antes, checa a cada "
+    print(f"Serviço de lembretes ativo (1 hora antes, checa a cada "
           f"{args.interval}s). Ctrl+C para sair.")
     try:
         while True:

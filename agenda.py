@@ -39,6 +39,7 @@ DB = Path(__file__).with_name("eventos.json")
 FMT = "%Y-%m-%d %H:%M"
 DATA_FMT = "%Y-%m-%d"
 ALERTAS_MIN = [60, 30, 15]  # 1h, 30min, 15min antes
+ALERTA_MIN = 60  # Minutos de antecedência para notificações (usado pelo notificador)
 REPEATS = ("none", "daily", "weekdays", "weekly", "monthly")
 
 # Google Calendar integration
