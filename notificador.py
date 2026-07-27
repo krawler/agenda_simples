@@ -44,7 +44,8 @@ if hasattr(sys.stderr, "reconfigure"):
 
 ALERTA_EMAIL = 60       # minutos (1 hora)
 ALERTA_TELEGRAM = ALERTA_EMAIL  # mesma frequência que o e‑mail
-ENVIADOS = Path(__file__).with_name("enviados.json")
+ENVIADOS_EMAIL = Path(__file__).with_name("enviados_email.json")
+ENVIADOS_TELEGRAM = Path(__file__).with_name("enviados_telegram.json")
 
 
 # --------------------------------------------------------------------- config
@@ -96,11 +97,15 @@ def carregar_config():
 
 
 # ------------------------------------------------------------------ dedup db
-def carregar_enviados():
-    if ENVIADOS.exists():
-        return set(json.loads(ENVIADOS.read_text(encoding="utf-8")))
+def carregar_enviados_email():
+    if ENVIADOS_EMAIL.exists():
+        return set(json.loads(ENVIADOS_EMAIL.read_text(encoding="utf-8")))
     return set()
 
+def carregar_enviados_telegram():
+    if ENVIADOS_TELEGRAM.exists():
+        return set(json.loads(ENVIADOS_TELEGRAM.read_text(encoding="utf-8")))
+    return set()
 
 def salvar_enviados(chaves, agora):
     """Persiste as chaves, descartando ocorrencias com mais de 1 dia."""
@@ -113,8 +118,10 @@ def salvar_enviados(chaves, agora):
             continue
         if occ >= limite:
             manter.append(k)
-    ENVIADOS.write_text(json.dumps(sorted(manter), ensure_ascii=False, indent=2),
-                        encoding="utf-8")
+    ENVIADOS_EMAIL.write_text(json.dumps(sorted(manter), ensure_ascii=False, indent=2),
+                             encoding="utf-8")
+    ENVIADOS_TELEGRAM.write_text(json.dumps(sorted(manter), ensure_ascii=False, indent=2),
+                                 encoding="utf-8")
 
 
 # ------------------------------------------------------------------ mensagens
@@ -179,7 +186,8 @@ def enviar_telegram(titulo, mensagem, cfg):
 def processar(cfg, dry_run=False):
     """Checa e envia lembretes de email (60min) e Telegram (60min)."""
     agora = datetime.now()
-    enviados = carregar_enviados()
+    enviados_email = carregar_enviados_email()
+    enviados_telegram = carregar_enviados_telegram()
     novos = 0
 
     # E-mail: 60 minutos (1 hora) antes
@@ -188,7 +196,7 @@ def processar(cfg, dry_run=False):
                                        agora + timedelta(minutes=ALERTA_EMAIL))
         for occ, e in janela_email:
             chave = f"email|{e['id']}|{occ.isoformat()}"
-            if chave in enviados:
+            if chave in enviados_email:
                 continue
             msg = montar_email(e, occ, cfg["email"])
             if dry_run:
@@ -200,7 +208,7 @@ def processar(cfg, dry_run=False):
                 enviar_email(msg, cfg["email"])
                 print(f"[{agora:%H:%M}] E-mail: '{e['titulo']}' → "
                       f"{msg['To']} ({occ:%H:%M})")
-            enviados.add(chave)
+            enviados_email.add(chave)
             novos += 1
 
     # Telegram: 60 minutos (1 hora) antes (mesma frequência que e‑mail)
@@ -209,7 +217,7 @@ def processar(cfg, dry_run=False):
                                     agora + timedelta(minutes=ALERTA_TELEGRAM))
         for occ, e in janela_tg:
             chave = f"telegram|{e['id']}|{occ.isoformat()}"
-            if chave in enviados:
+            if chave in enviados_telegram:
                 continue
             # Usa exatamente o mesmo conteúdo que o e‑mail
             mensagem = montar_mensagem(e, occ)
@@ -221,14 +229,17 @@ def processar(cfg, dry_run=False):
                 if enviar_telegram(e['titulo'], mensagem, cfg["telegram"]):
                     print(f"[{agora:%H:%M}] Telegram: '{e['titulo']}' → "
                           f"{cfg['telegram']['chat_id']} ({occ:%H:%M})")
-                    enviados.add(chave)
+                    enviados_telegram.add(chave)
                     novos += 1
                 else:
                     # falha: nao marca como enviado, sera retentado
                     pass
 
     if not dry_run:
-        salvar_enviados(enviados, agora)
+        if "email" in cfg:
+            salvar_enviados(enviados_email, agora)
+        if "telegram" in cfg:
+            salvar_enviados(enviados_telegram, agora)
     return novos
 
 
