@@ -472,7 +472,7 @@ def sync_from_google():
     else:
         print("Nenhum evento novo para importar do Google Calendar.")
     
-    return True
+    #return True
 
 
 # -------------------------------------------------------------------- comandos
