@@ -312,18 +312,20 @@ def render_page(sel):
 </head>
 <body class="bg-base-200 min-h-screen">
   <div class="max-w-5xl mx-auto p-4 space-y-4">
-    <div class="flex items-center justify-between gap-2">
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
       <h1 class="text-2xl font-bold">📅 Agenda Simples</h1>
-      <div class="flex items-center gap-2">
+      <div class="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
         <select id="tema" onchange="trocarTema(this.value)"
-          class="select select-bordered select-sm" title="Tema">
+          class="select select-bordered select-sm w-full sm:w-auto" title="Tema">
           {"".join(f'<option value="{t}">{t}</option>' for t in TEMAS)}
         </select>
-        <button class="btn btn-sm btn-ghost" hx-get="/alerts" hx-target="#alerts"
-          hx-swap="outerHTML">Mostrar próximos</button>
-        <button class="btn btn-sm btn-primary" hx-post="/sync" hx-target="#sync-status"
-          hx-swap="outerHTML" hx-indicator="#sync-indicator">☁ Sincronizar Google</button>
-        <span id="sync-indicator" class="loading loading-spinner loading-sm htmx-indicator"></span>
+        <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-start sm:justify-end">
+          <button class="btn btn-sm btn-ghost" hx-get="/alerts" hx-target="#alerts"
+            hx-swap="outerHTML">Mostrar próximos</button>
+          <button class="btn btn-sm btn-primary" hx-post="/sync" hx-target="#sync-status"
+            hx-swap="outerHTML" hx-indicator="#sync-indicator">☁ Sincronizar Google</button>
+          <span id="sync-indicator" class="loading loading-spinner loading-sm htmx-indicator"></span>
+        </div>
       </div>
     </div>
     {render_alerts_banner()}
