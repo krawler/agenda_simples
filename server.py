@@ -112,8 +112,6 @@ def render_evento_item(occ, e):
     if e.get("repeat"):
         badges += (f'<span class="badge badge-sm badge-outline">'
                    f'{esc(e["repeat"])}</span>')
-    if e.get("google_id"):
-        badges += '<span class="badge badge-sm badge-success">☁</span>'
     desc = (f'<div class="text-sm opacity-70">{esc(e["desc"])}</div>'
             if e.get("desc") else "")
     iso = occ.date().isoformat()
@@ -259,22 +257,23 @@ def render_sync_status(status_msg="", is_loading=False, auto_hide=False):
     """Renderiza o status da sincronização."""
     if is_loading:
         return f'''<div id="sync-status" class="alert alert-info shadow-sm">
-  <div class="flex items-center gap-2">
-    <span class="loading loading-spinner loading-sm"></span>
-    <span>Sincronizando com Google Calendar...</span>
-  </div>
-</div>'''
+        <div class="flex items-center gap-2">
+          <span class="loading loading-spinner loading-sm"></span>
+          <span>Sincronizando com Google Calendar...</span>
+        </div>
+      </div>'''
     elif status_msg:
         alert_class = "alert-success" if "sucesso" in status_msg.lower() or "conclu" in status_msg.lower() else "alert-error"
         auto_hide_script = ''
         if auto_hide and "sucesso" in status_msg.lower():
             auto_hide_script = '''
-    <script>
-      setTimeout(function() {
-        var el = document.getElementById('sync-status');
-        if (el) el.remove();
-      }, 3000);
-    </script>'''
+                              <script>
+                                setTimeout(function() {
+                                  var el = document.getElementById('sync-status');
+                                  if (el) el.remove();
+                                }, 3000);
+                              </script>'''
+            print("Passando por aqui esconde a div")
         return f'''<div id="sync-status" class="alert {alert_class} shadow-sm">
   <div class="flex items-center gap-2">
     <span>{esc(status_msg)}</span>
@@ -321,7 +320,7 @@ def render_page(sel):
         </select>
         <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-start sm:justify-end">
           <button class="btn btn-sm btn-ghost" hx-get="/alerts" hx-target="#alerts"
-            hx-swap="outerHTML">Mostrar próximos</button>
+            hx-swap="outerHTML">Mostrar próximo</button>
           <button class="btn btn-sm btn-primary" hx-post="/sync" hx-target="#sync-status"
             hx-swap="outerHTML" hx-indicator="#sync-indicator">☁ Sincronizar Google</button>
           <span id="sync-indicator" class="loading loading-spinner loading-sm htmx-indicator"></span>
@@ -490,10 +489,7 @@ class Handler(BaseHTTPRequestHandler):
         if not agenda.GOOGLE_CREDENTIALS_FILE.exists():
             self._send(render_sync_status("Arquivo credentials.json não encontrado. Configure no Google Cloud Console."))
             return
-        
-        # Mostra loading
-        self._send(render_sync_status("", is_loading=True))
-        
+
         # Executa sincronização de forma síncrona
         try:
             # Envia eventos locais para o Google
@@ -505,10 +501,12 @@ class Handler(BaseHTTPRequestHandler):
             msg = f"Erro na sincronização: {str(ex)}"
         
         # Retorna o status final (substitui o loading) com auto-hide para sucesso
+        print(msg)
         self._send(render_sync_status(msg, auto_hide=True))
 
     def _responder_com_calendario(self, painel):
         # painel do dia (target) + calendario via swap-oob para atualizar os pontos
+        
         cal_html = render_calendar(painel.year, painel.month, painel)
         cal_oob = cal_html.replace('id="calendar"',
                                    'id="calendar" hx-swap-oob="true"', 1)
