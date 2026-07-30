@@ -1,246 +1,334 @@
 #!/usr/bin/env python3
-"""Servidor web da agenda simples.
+"""Interface web (secundaria) da agenda simples.
 
-Roteamento:
-  /          → página principal (agenda)
-  /eventos   → lista de eventos
-  /sync      → sincroniza com Google Calendar
-  /alertas   → lista de alertas
-  /sync/…    → endpoints de sincronização
-  /api/…     → endpoints de API (ex.: criar, atualizar, remover)
+Mini servidor em stdlib puro (http.server) que reaproveita a logica do
+agenda.py. Front-end com HTMX + Tailwind + daisyUI (via CDN).
 
-A página principal exibe:
-  • Um cabeçalho com título, seletor de tema e botões de ação
-  • Um calendário mensal com eventos
-  • Um banner de alertas
-  • Um painel de sincronização
+Uso:
+  python server.py            # http://localhost:8000
+  python server.py --port 8080
 
-O layout é responsivo: em telas pequenas o cabeçalho se adapta colocando os controles
-na linha abaixo do título.
+Obs.: Thymeleaf e um motor de templates Java/Spring e nao roda em Python;
+por isso a pagina e servida por este mini servidor Python, mantendo HTMX,
+Tailwind e daisyUI (que sao apenas front-end).
 """
 import argparse
+import calendar as calmod
+import html
 import json
-import os
-import sys
-import time
-from datetime import datetime, timedelta
-from http.server import BaseHTTPRequestHandler, HTTPServer
-from pathlib import Path
+import threading
+from datetime import date, datetime, time, timedelta
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-import agenda  # reutiliza carregar()/expandir()/ALERTA_MIN
+import agenda  # reaproveita carregar/salvar/expandir/proximo_id/FMT/REPEATS/...
 
-if hasattr(sys.stderr, "reconfigure"):
-    sys.stderr.reconfigure(encoding="utf-8")
-
-# --------------------------------------------------------------------- config
-def carregar_env(caminho):
-    """Carrega KEY=VALUE de um .env simples, sem sobrescrever o ambiente."""
-    p = Path(caminho)
-    if not p.exists():
-        return
-    for linha in p.read_text(encoding="utf-8").splitlines():
-        linha = linha.strip()
-        if not linha or linha.startswith("#") or "=" not in linha:
-            continue
-        chave, _, valor = linha.partition("=")
-        os.environ.setdefault(chave.strip(), valor.strip().strip('"').strip("'"))
+WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
+TEMAS = ["light", "dark", "cupcake", "corporate", "emerald", "synthwave",
+         "dracula", "night", "coffee", "winter"]
+MESES = ["", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+         "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
 
 
-def carregar_config():
-    """Carrega e valida a config. Email e Telegram sao opcionais (nao bloqueantes)."""
-    config = {}
-
-    # E-mail (opcional)
-    host = os.environ.get("SMTP_HOST")
-    user = os.environ.get("SMTP_USER")
-    senha = os.environ.get("SMTP_PASSWORD")
-    to = os.environ.get("AGENDA_EMAIL_TO")
-    if all([host, user, senha, to]):
-        config["email"] = {
-            "host": host,
-            "port": int(os.environ.get("SMTP_PORT", "587")),
-            "user": user,
-            "password": senha,
-            "from": os.environ.get("SMTP_FROM") or user,
-            "to": to,
-        }
-
-    # Telegram (opcional)
-    tg_token = os.environ.get("TELEGRAM_BOT_TOKEN")
-    tg_chat = os.environ.get("TELEGRAM_CHAT_ID")
-    if tg_token and tg_chat:
-        config["telegram"] = {
-            "token": tg_token,
-            "chat_id": tg_chat,
-        }
-
-    if not config:
-        sys.exit("Nenhum serviço de notificacao configurado.\n"
-                 "Configure SMTP (email) e/ou Telegram via .env ou variáveis de ambiente.")
-    return config
+# --------------------------------------------------------------- consultas dados
+def eventos_do_dia(d):
+    wstart = datetime.combine(d, time.min)
+    wend = datetime.combine(d, time.max)
+    return agenda.expandir(agenda.carregar(), wstart, wend)
 
 
-# ------------------------------------------------------------------ dedup db
-def carregar_enviados():
-    if ENVIADOS.exists():
-        return set(json.loads(ENVIADOS.read_text(encoding="utf-8")))
-    return set()
+def dias_com_eventos(ano, mes):
+    ultimo = calmod.monthrange(ano, mes)[1]
+    wstart = datetime.combine(date(ano, mes, 1), time.min)
+    wend = datetime.combine(date(ano, mes, ultimo), time.max)
+    return {occ.date() for occ, _ in agenda.expandir(agenda.carregar(), wstart, wend)}
 
 
-def salvar_enviados(chaves, agora):
-    """Persiste as chaves, descartando ocorrencias com mais de 1 dia."""
-    limite = agora - timedelta(days=1)
-    manter = []
-    for k in chaves:
-        try:
-            occ = datetime.fromisoformat(k.split("|", 2)[2])
-        except (ValueError, IndexError):
-            continue
-        if occ >= limite:
-            manter.append(k)
-    ENVIADOS.write_text(json.dumps(sorted(manter), ensure_ascii=False, indent=2),
-                        encoding="utf-8")
+def alertas_30min():
+    agora = datetime.now()
+    return agenda.expandir(agenda.carregar(), agora, agora + timedelta(minutes=30))
 
 
-# ------------------------------------------------------------------ mensagens
-def montar_mensagem(e, occ):
-    """Monta o conteúdo da notificação (usado por email e Telegram)."""
-    ini = occ
-    fim = ini + timedelta(minutes=e["dur"]) if e.get("dur") else None
-    quando = f"{ini:%d/%m/%Y %H:%M}" + (f"–{fim:%H:%M}" if fim else "")
-
-    linhas = [f"Lembrete: seu evento começa em breve.", "",
-              f"• Evento: {e['titulo']}",
-              f"• Quando: {quando}"]
-    if e.get("dur"):
-        linhas.append(f"• Duração: {e['dur']} min")
-    if e.get("desc"):
-        linhas.append(f"• Descrição: {e['desc']}")
-    if e.get("repeat"):
-        linhas.append(f"• Recorrência: {e['repeat']}")
-    linhas += ["", "— Agenda Simples"]
-    return "\n".join(linhas)
+# ------------------------------------------------------------------- renderizacao
+def esc(v):
+    return html.escape(str(v)) if v is not None else ""
 
 
-# ------------------------------------------------------------------ e-mail
-def montar_email(e, occ, cfg):
-    msg = EmailMessage()
-    msg["Subject"] = f"⏰ Lembrete: {e['titulo']} às {occ:%H:%M}"
-    msg["From"] = cfg["from"]
-    msg["To"] = e.get("to") or cfg["to"]
-    msg.set_content(montar_mensagem(e, occ))
-    return msg
-
-
-def enviar_email(msg, cfg):
-    import smtplib
-
-    if cfg["port"] == 465:
-        with smtplib.SMTP_SSL(cfg["host"], cfg["port"], timeout=30) as s:
-            s.login(cfg["user"], cfg["password"])
-            s.send_message(msg)
-    else:
-        with smtplib.SMTP(cfg["host"], cfg["port"], timeout=30) as s:
-            s.starttls()
-            s.login(cfg["user"], cfg["password"])
-            s.send_message(msg)
-
-
-# ------------------------------------------------------------------ telegram
-def enviar_telegram(titulo, mensagem, cfg):
-    """Envia via API do Telegram (returns True se sucesso)."""
-    url = f"https://api.telegram.org/bot{cfg['token']}/sendMessage"
-    dados = urlencode({"chat_id": cfg["chat_id"], "text": mensagem})
-    try:
-        req = Request(url, data=dados.encode("utf-8"))
-        urlopen(req, timeout=30)
-        return True
-    except Exception as ex:
-        print(f"[erro Telegram] {ex}", file=sys.stderr)
-        return False
-
-
-# ------------------------------------------------------------------ renderização
 def render_calendar(ano, mes, sel):
-    """Renderiza o calendário mensal com eventos."""
-    # ... (código existente) ...
+    hoje = date.today()
+    prev_ano, prev_mes = (ano - 1, 12) if mes == 1 else (ano, mes - 1)
+    next_ano, next_mes = (ano + 1, 1) if mes == 12 else (ano, mes + 1)
+    com_eventos = dias_com_eventos(ano, mes)
+
+    cabecalho = "".join(f'<div class="text-center text-xs font-semibold '
+                        f'opacity-60 py-1">{d}</div>' for d in WEEKDAYS)
+
+    semanas = calmod.Calendar(firstweekday=6).monthdayscalendar(ano, mes)
+    celulas = []
+    for semana in semanas:
+        for dia in semana:
+            if dia == 0:
+                celulas.append('<div></div>')
+                continue
+            d = date(ano, mes, dia)
+            iso = d.isoformat()
+            classes = ["btn", "btn-sm", "btn-ghost", "w-full", "flex-col",
+                       "gap-0", "h-12", "relative"]
+            if d == sel:
+                classes = ["btn", "btn-sm", "btn-primary", "w-full", "flex-col",
+                           "gap-0", "h-12", "relative"]
+            elif d == hoje:
+                classes.append("ring ring-primary ring-1")
+            ponto = ('<span class="w-1.5 h-1.5 rounded-full bg-accent absolute '
+                     'bottom-1"></span>') if d in com_eventos else ""
+            celulas.append(
+                f'<button class="{" ".join(classes)}" '
+                f'hx-get="/day?date={iso}" hx-target="#day-panel">'
+                f'<span>{dia}</span>{ponto}</button>')
+
+    return f'''<div id="calendar" class="card bg-base-100 shadow-md">
+  <div class="card-body p-4">
+    <div class="flex items-center justify-between mb-2">
+      <button class="btn btn-sm btn-ghost"
+        hx-get="/calendar?year={prev_ano}&month={prev_mes}&sel={sel.isoformat()}"
+        hx-target="#calendar" hx-swap="outerHTML">‹</button>
+      <h2 class="text-lg font-bold">{MESES[mes]} {ano}</h2>
+      <button class="btn btn-sm btn-ghost"
+        hx-get="/calendar?year={next_ano}&month={next_mes}&sel={sel.isoformat()}"
+        hx-target="#calendar" hx-swap="outerHTML">›</button>
+    </div>
+    <div class="grid grid-cols-7 gap-1">{cabecalho}</div>
+    <div class="grid grid-cols-7 gap-1 mt-1">{"".join(celulas)}</div>
+  </div>
+</div>'''
 
 
 def render_evento_item(occ, e):
-    """Renderiza um evento dentro de um dia."""
-    # ... (código existente) ...
+    dur = ""
+    if e.get("dur"):
+        fim = occ + timedelta(minutes=e["dur"])
+        dur = f"–{fim:%H:%M}"
+    badges = ""
+    if e.get("repeat"):
+        badges += (f'<span class="badge badge-sm badge-outline">'
+                   f'{esc(e["repeat"])}</span>')
+    if e.get("google_id"):
+        badges += '<span class="badge badge-sm badge-success">☁</span>'
+    desc = (f'<div class="text-sm opacity-70">{esc(e["desc"])}</div>'
+            if e.get("desc") else "")
+    iso = occ.date().isoformat()
+    editar = (f'hx-get="/edit?id={e["id"]}&date={iso}" '
+              f'hx-target="#day-panel"')
+
+    if e.get("repeat"):
+        acoes = f'''<div class="dropdown dropdown-end">
+      <button tabindex="0" class="btn btn-xs btn-ghost">⋯</button>
+      <ul tabindex="0" class="dropdown-content z-10 menu p-2 shadow bg-base-100 rounded-box w-44">
+        <li><a {editar}>✎ Editar série</a></li>
+        <li><a hx-post="/skip?id={e["id"]}&date={iso}" hx-target="#day-panel">
+          ⤵ Pular este dia</a></li>
+        <li><a class="text-error"
+          hx-post="/delete?id={e["id"]}&date={iso}" hx-target="#day-panel"
+          hx-confirm="Remover a série inteira '{esc(e["titulo"])}'?">🗑 Remover série</a></li>
+      </ul>
+    </div>'''
+    else:
+        acoes = f'''<div class="flex gap-1">
+      <button class="btn btn-xs btn-ghost" {editar}>✎</button>
+      <button class="btn btn-xs btn-ghost text-error"
+        hx-post="/delete?id={e["id"]}&date={iso}" hx-target="#day-panel"
+        hx-confirm="Remover '{esc(e["titulo"])}'?">✕</button>
+    </div>'''
+
+    return f'''<li class="flex items-start gap-3 p-3 rounded-lg bg-base-200">
+  <div class="text-primary font-mono font-semibold whitespace-nowrap">
+    {occ:%H:%M}{dur}
+  </div>
+  <div class="flex-1">
+    <div class="font-medium flex items-center gap-2">{esc(e["titulo"])} {badges}</div>
+    {desc}
+  </div>
+  {acoes}
+</li>'''
 
 
 def render_edit_form(e, occ, panel_date):
-    """Renderiza o formulário de edição de evento."""
-    # ... (código existente) ...
+    base = agenda.evento_inicio(e)
+    iso = panel_date.isoformat()
+    opts = "".join(
+        f'<option value="{r}"{" selected" if r == (e.get("repeat") or "none") else ""}>'
+        f'{"sem repetição" if r == "none" else r}</option>'
+        for r in agenda.REPEATS)
+    return f'''<li class="p-3 rounded-lg bg-base-200 ring ring-primary ring-1">
+  <form hx-post="/update" hx-target="#day-panel" class="space-y-2">
+    <input type="hidden" name="id" value="{e["id"]}">
+    <input type="hidden" name="panel_date" value="{iso}">
+    <input name="titulo" required value="{esc(e["titulo"])}"
+      class="input input-bordered input-sm w-full">
+    <div class="flex gap-2">
+      <input type="date" name="date" value="{base.date().isoformat()}" required
+        class="input input-bordered input-sm flex-1">
+      <input type="time" name="time" value="{base:%H:%M}" required
+        class="input input-bordered input-sm w-28">
+    </div>
+    <div class="flex gap-2">
+      <input type="number" name="dur" min="1" value="{e.get('dur') or ''}"
+        placeholder="min" class="input input-bordered input-sm w-24">
+      <select name="repeat" class="select select-bordered select-sm flex-1">{opts}</select>
+    </div>
+    <input name="desc" value="{esc(e.get('desc') or '')}" placeholder="Descrição"
+      class="input input-bordered input-sm w-full">
+    <input type="date" name="until" value="{esc(e.get('until') or '')}"
+      title="repetir até" class="input input-bordered input-sm w-full">
+    <div class="flex gap-2">
+      <button class="btn btn-primary btn-sm flex-1">Salvar</button>
+      <button type="button" class="btn btn-ghost btn-sm"
+        hx-get="/day?date={iso}" hx-target="#day-panel">Cancelar</button>
+    </div>
+  </form>
+</li>'''
 
 
 def render_day_panel(d, editando=None):
-    """Renderiza um painel de dia no calendário."""
-    # ... (código existente) ...
+    itens = eventos_do_dia(d)
+    if itens:
+        lista = "<ul class='space-y-2'>" + "".join(
+            render_edit_form(e, occ, d) if e["id"] == editando
+            else render_evento_item(occ, e)
+            for occ, e in itens) + "</ul>"
+    else:
+        lista = ('<div class="text-center opacity-50 py-6">Nenhum evento '
+                 'neste dia.</div>')
+    iso = d.isoformat()
+    opts = "".join(
+        f'<option value="{r}"{" selected" if r == "none" else ""}>'
+        f'{"sem repetição" if r == "none" else r}</option>'
+        for r in agenda.REPEATS)
+
+    novo_evento = ""
+    if editando is None:
+        novo_evento = f'''<div class="divider my-2">Novo evento</div>
+    <form hx-post="/event" hx-target="#day-panel" class="space-y-2">
+      <input type="hidden" name="panel_date" value="{iso}">
+      <input name="titulo" required placeholder="Título"
+        class="input input-bordered input-sm w-full">
+      <div class="flex gap-2">
+        <input type="date" name="date" value="{iso}" required
+          class="input input-bordered input-sm flex-1">
+        <input type="time" name="time" value="09:00" required
+          class="input input-bordered input-sm w-28">
+        <input type="number" name="dur" min="1" placeholder="min"
+          class="input input-bordered input-sm w-24" title="duração em minutos">
+      </div>
+      <div class="flex gap-2">
+        <select name="repeat" class="select select-bordered select-sm flex-1">
+          {opts}
+        </select>
+        <input type="date" name="until" title="repetir até (opcional)"
+        class="input input-bordered input-sm w-full">
+      </div>
+      <input name="desc" placeholder="Descrição (opcional)"
+        class="input input-bordered input-sm w-full">
+      <button class="btn btn-primary btn-sm w-full">Adicionar</button>
+    </form>'''
+
+    return f'''<div id="day-panel" class="card bg-base-100 shadow-md">
+  <div class="card-body p-4">
+    <h2 class="text-lg font-bold">{d:%d/%m/%Y} · {WEEKDAYS[(d.weekday()+1)%7]}</h2>
+    {lista}
+    {novo_evento}
+  </div>
+</div>'''
 
 
 def render_alerts_banner():
-    """Renderiza o banner de alertas."""
-    # ... (código existente) ...
+    itens = alertas_30min()
+    if not itens:
+        return '<div id="alerts"></div>'
+    agora = datetime.now()
+    linhas = "".join(
+        f'<span class="badge badge-warning gap-1">⏰ {esc(e["titulo"])} '
+        f'({int((occ - agora).total_seconds() // 60)} min)</span> '
+        for occ, e in itens)
+    return (f'<div id="alerts" class="alert alert-warning shadow-sm">'
+            f'<div class="flex flex-wrap gap-2 items-center">'
+            f'<span class="font-semibold">Próximos 30 min:</span>{linhas}</div></div>')
 
 
 def render_sync_status(status_msg="", is_loading=False):
-    """Renderiza o painel de sincronização."""
-    # ... (código existente) ...
+    """Renderiza o status da sincronização."""
+    if is_loading:
+        return f'''<div id="sync-status" class="alert alert-info shadow-sm" hx-ext="ws">
+  <div class="flex items-center gap-2">
+    <span class="loading loading-spinner loading-sm"></span>
+    <span>Sincronizando com Google Calendar...</span>
+  </div>
+</div>'''
+    elif status_msg:
+        alert_class = "alert-success" if "sucesso" in status_msg.lower() or "conclu" in status_msg.lower() else "alert-error"
+        return f'''<div id="sync-status" class="alert {alert_class} shadow-sm">
+  <div class="flex items-center gap-2">
+    <span>{esc(status_msg)}</span>
+  </div>
+</div>'''
+    return '<div id="sync-status"></div>'
 
 
 def render_page(sel):
-    """Renderiza a página principal."""
-    # Cabeçalho responsivo
-    header = f"""
-    <header class="topbar">
-        <h1 class="title">Agenda Simples</h1>
-        <div class="controls">
-            <label for="theme-select">Tema:</label>
-            <select id="theme-select" onchange="changeTheme(this.value)">
-                <option value="light" {'selected' if sel['theme']=='light' else ''}>Claro</option>
-                <option value="dark" {'selected' if sel['theme']=='dark' else ''}>Escuro</option>
-            </select>
-            <button onclick="location.href='/sync'">Sincronizar</button>
-            <button onclick="location.href='/eventos'">Eventos</button>
-        </div>
-    </header>
-    """
+    return f'''<!DOCTYPE html>
+<html lang="pt-br" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agenda Simples</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" rel="stylesheet">
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script>
+    // aplica o tema salvo antes de renderizar (evita flash)
+    (function () {{
+      var t = localStorage.getItem("tema");
+      if (t) document.documentElement.setAttribute("data-theme", t);
+    }})();
+    function trocarTema(v) {{
+      document.documentElement.setAttribute("data-theme", v);
+      localStorage.setItem("tema", v);
+    }}
+    document.addEventListener("DOMContentLoaded", function () {{
+      var sel = document.getElementById("tema");
+      var t = localStorage.getItem("tema");
+      if (sel && t) sel.value = t;
+    }});
+  </script>
+</head>
+<body class="bg-base-200 min-h-screen">
+  <div class="max-w-5xl mx-auto p-4 space-y-4">
+    <div class="flex items-center justify-between gap-2">
+      <h1 class="text-2xl font-bold">📅 Agenda Simples</h1>
+      <div class="flex items-center gap-2">
+        <select id="tema" onchange="trocarTema(this.value)"
+          class="select select-bordered select-sm" title="Tema">
+          {"".join(f'<option value="{t}">{t}</option>' for t in TEMAS)}
+        </select>
+        <button class="btn btn-sm btn-ghost" hx-get="/alerts" hx-target="#alerts"
+          hx-swap="outerHTML">Mostrar próximos</button>
+        <button class="btn btn-sm btn-primary" hx-post="/sync" hx-target="#sync-status"
+          hx-swap="outerHTML" hx-indicator="#sync-indicator">☁ Sincronizar Google</button>
+        <span id="sync-indicator" class="loading loading-spinner loading-sm htmx-indicator"></span>
+      </div>
+    </div>
+    {render_alerts_banner()}
+    {render_sync_status()}
+    <div class="grid md:grid-cols-2 gap-4 items-start">
+      {render_calendar(sel.year, sel.month, sel)}
+      {render_day_panel(sel)}
+    </div>
+  </div>
+</body>
+</html>'''
 
-    # Estilos CSS (responsivo)
-    styles = """
-    <style>
-    body {font-family: Arial, sans-serif; margin:0; padding:0;}
-    .topbar {display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; padding:10px; background:#f0f0f0;}
-    .topbar .title {margin:0; font-size:1.5em;}
-    .topbar .controls {display:flex; flex-wrap:wrap; gap:10px; align-items:center;}
-    .topbar .controls label {margin-right:5px;}
-    .topbar .controls select, .topbar .controls button {padding:5px 10px;}
-    @media (max-width: 600px) {
-        .topbar {flex-direction:column; align-items:flex-start;}
-        .topbar .controls {margin-top:5px;}
-    }
-    </style>
-    """
 
-    # Corpo da página
-    body = f"""
-    {header}
-    {styles}
-    <main>
-        {render_calendar(sel['ano'], sel['mes'], sel)}
-        {render_alerts_banner()}
-        {render_sync_status()}
-    </main>
-    """
-
-    return body
-
-
-# --------------------------------------------------------------------- handler
+# ------------------------------------------------------------------------- server
 class Handler(BaseHTTPRequestHandler):
     def _send(self, corpo, status=200):
         dados = corpo.encode("utf-8")
@@ -251,54 +339,189 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(dados)
 
     def _parse_date(self, texto, padrao=None):
-        # ... (código existente) ...
-        pass
+        try:
+            return datetime.strptime(texto, "%Y-%m-%d").date()
+        except (ValueError, TypeError):
+            return padrao or date.today()
 
     def do_GET(self):
-        # ... (código existente) ...
-        pass
+        u = urlparse(self.path)
+        q = parse_qs(u.query)
+
+        match u.path:
+            case "/":
+                self._send(render_page(date.today()))
+            case "/day":
+                d = self._parse_date(q.get("date", [""])[0])
+                self._send(render_day_panel(d))
+            case "/edit":
+                d = self._parse_date(q.get("date", [""])[0])
+                eid = int(q.get("id", ["0"])[0])
+                self._send(render_day_panel(d, editando=eid))
+            case "/calendar":
+                try:
+                    ano = int(q.get("year", [date.today().year])[0])
+                    mes = int(q.get("month", [date.today().month])[0])
+                    sel = self._parse_date(q.get("sel", [""])[0])
+                    self._send(render_calendar(ano, mes, sel))
+                except ValueError:
+                    ano = date.today().year
+                    mes = date.today().month
+                    # Clamp month to valid range
+                    mes = max(1, min(12, mes))
+                    sel = self._parse_date(q.get("sel", [""])[0])
+                    self._send(render_calendar(ano, mes, sel))
+            case "/alerts":
+                self._send(render_alerts_banner())
+            case _:
+                self._send("<h1>404</h1>", 404)
 
     def do_POST(self):
-        # ... (código existente) ...
-        pass
+        u = urlparse(self.path)
+        q = parse_qs(u.query)
+        tamanho = int(self.headers.get("Content-Length", 0))
+        corpo = self.rfile.read(tamanho).decode("utf-8") if tamanho else ""
+        form = {k: v[0] for k, v in parse_qs(corpo).items()}
+
+        if u.path == "/event":
+            self._criar_evento(form)
+        elif u.path == "/update":
+            self._atualizar_evento(form)
+        elif u.path == "/delete":
+            self._remover_evento(q)
+        elif u.path == "/skip":
+            self._pular_ocorrencia(q)
+        elif u.path == "/sync":
+            self._sincronizar_google()
+        else:
+            self._send("<h1>404</h1>", 404)
 
     def _criar_evento(self, form):
-        # ... (código existente) ...
-        pass
+        d = self._parse_date(form.get("date"))
+        hora = form.get("time", "09:00")
+        try:
+            inicio = datetime.strptime(f"{d.isoformat()} {hora}", agenda.FMT)
+        except ValueError:
+            inicio = datetime.combine(d, time(9, 0))
+        dur = form.get("dur", "").strip()
+        rep = form.get("repeat", "none")
+        until = form.get("until", "").strip() or None
+
+        eventos = agenda.carregar()
+        eventos.append({
+            "id": agenda.proximo_id(eventos),
+            "titulo": form.get("titulo", "Sem título").strip() or "Sem título",
+            "inicio": inicio.strftime(agenda.FMT),
+            "dur": int(dur) if dur.isdigit() else None,
+            "desc": (form.get("desc") or "").strip() or None,
+            "repeat": None if rep == "none" else rep,
+            "until": until,
+        })
+        agenda.salvar(eventos)
+        painel = self._parse_date(form.get("panel_date")) or d
+        self._responder_com_calendario(painel)
 
     def _atualizar_evento(self, form):
-        # ... (código existente) ...
-        pass
+        eid = int(form.get("id", "0"))
+        eventos = agenda.carregar()
+        e = next((x for x in eventos if x["id"] == eid), None)
+        if e is not None:
+            d = self._parse_date(form.get("date"))
+            hora = form.get("time", "09:00")
+            try:
+                inicio = datetime.strptime(f"{d.isoformat()} {hora}", agenda.FMT)
+            except ValueError:
+                inicio = datetime.combine(d, time(9, 0))
+            dur = form.get("dur", "").strip()
+            rep = form.get("repeat", "none")
+            e["titulo"] = form.get("titulo", "").strip() or e["titulo"]
+            e["inicio"] = inicio.strftime(agenda.FMT)
+            e["dur"] = int(dur) if dur.isdigit() else None
+            e["desc"] = (form.get("desc") or "").strip() or None
+            e["repeat"] = None if rep == "none" else rep
+            e["until"] = form.get("until", "").strip() or None
+            agenda.salvar(eventos)
+        self._responder_com_calendario(self._parse_date(form.get("panel_date")))
 
     def _remover_evento(self, q):
-        # ... (código existente) ...
-        pass
+        eid = int(q.get("id", ["0"])[0])
+        eventos = agenda.carregar()
+        evento = next((x for x in eventos if x["id"] == eid), None)
+        if evento and agenda.GOOGLE_AVAILABLE and evento.get("google_id"):
+            # Tenta remover do Google Calendar
+            try:
+                agenda.delete_event_from_google(evento)
+            except:
+                pass
+        eventos = [e for e in agenda.carregar() if e["id"] != eid]
+        agenda.salvar(eventos)
+        painel = self._parse_date(q.get("date", [""])[0])
+        self._responder_com_calendario(painel)
 
     def _pular_ocorrencia(self, q):
-        # ... (código existente) ...
-        pass
+        eid = int(q.get("id", ["0"])[0])
+        dia = self._parse_date(q.get("date", [""])[0]).isoformat()
+        eventos = agenda.carregar()
+        e = next((x for x in eventos if x["id"] == eid), None)
+        if e is not None:
+            excecoes = set(e.get("except") or [])
+            excecoes.add(dia)
+            e["except"] = sorted(excecoes)
+            agenda.salvar(eventos)
+        self._responder_com_calendario(self._parse_date(q.get("date", [""])[0]))
 
     def _sincronizar_google(self):
         """Endpoint para sincronizar com Google Calendar."""
-        # ... (código existente) ...
-        pass
+        if not agenda.GOOGLE_AVAILABLE:
+            self._send(render_sync_status("Bibliotecas do Google Calendar não instaladas. Execute: pip install google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client"))
+            return
+        
+        if not agenda.GOOGLE_CREDENTIALS_FILE.exists():
+            self._send(render_sync_status("Arquivo credentials.json não encontrado. Configure no Google Cloud Console."))
+            return
+        
+        # Mostra loading
+        self._send(render_sync_status("", is_loading=True))
+        
+        # Executa sincronização em thread separada para não bloquear
+        def do_sync():
+            try:
+                # Envia eventos locais para o Google
+                agenda.sync_all_to_google()
+                # Busca eventos do Google que não estão localmente
+                agenda.sync_from_google()
+                msg = "Sincronização concluída com sucesso!"
+            except Exception as ex:
+                msg = f"Erro na sincronização: {str(ex)}"
+            
+            # Atualiza o status via HTMX (precisa de uma forma de notificar o cliente)
+            # Como estamos em thread separada, vamos apenas logar
+            print(f"[SYNC] {msg}")
+        
+        threading.Thread(target=do_sync, daemon=True).start()
 
     def _responder_com_calendario(self, painel):
-        # ... (código existente) ...
-        pass
+        # painel do dia (target) + calendario via swap-oob para atualizar os pontos
+        cal_html = render_calendar(painel.year, painel.month, painel)
+        cal_oob = cal_html.replace('id="calendar"',
+                                   'id="calendar" hx-swap-oob="true"', 1)
+        self._send(render_day_panel(painel) + cal_oob)
 
     def log_message(self, *a):  # silencia log padrao ruidoso
         pass
 
 
 def main():
-    p = argparse.ArgumentParser(description="Servidor da agenda simples.")
-    p.add_argument("--port", type=int, default=8000, help="porta do servidor")
+    p = argparse.ArgumentParser(description="Servidor web da agenda simples.")
+    p.add_argument("--port", type=int, default=8000)
+    p.add_argument("--host", default="0.0.0.0")
     args = p.parse_args()
-
-    servidor = HTTPServer(("0.0.0.0", args.port), Handler)
-    print(f"Servidor rodando em http://localhost:{args.port}")
-    servidor.serve_forever()
+    srv = ThreadingHTTPServer((args.host, args.port), Handler)
+    print(f"Agenda web em http://{args.host}:{args.port}  (Ctrl+C para sair)")
+    try:
+        srv.serve_forever()
+    except KeyboardInterrupt:
+        print("\nServidor encerrado.")
 
 
 if __name__ == "__main__":
