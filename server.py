@@ -255,10 +255,10 @@ def render_alerts_banner():
             f'<span class="font-semibold">Próximos 30 min:</span>{linhas}</div></div>')
 
 
-def render_sync_status(status_msg="", is_loading=False):
+def render_sync_status(status_msg="", is_loading=False, auto_hide=False):
     """Renderiza o status da sincronização."""
     if is_loading:
-        return f'''<div id="sync-status" class="alert alert-info shadow-sm" hx-ext="ws">
+        return f'''<div id="sync-status" class="alert alert-info shadow-sm">
   <div class="flex items-center gap-2">
     <span class="loading loading-spinner loading-sm"></span>
     <span>Sincronizando com Google Calendar...</span>
@@ -266,11 +266,20 @@ def render_sync_status(status_msg="", is_loading=False):
 </div>'''
     elif status_msg:
         alert_class = "alert-success" if "sucesso" in status_msg.lower() or "conclu" in status_msg.lower() else "alert-error"
+        auto_hide_script = ''
+        if auto_hide and "sucesso" in status_msg.lower():
+            auto_hide_script = '''
+    <script>
+      setTimeout(function() {
+        var el = document.getElementById('sync-status');
+        if (el) el.remove();
+      }, 3000);
+    </script>'''
         return f'''<div id="sync-status" class="alert {alert_class} shadow-sm">
   <div class="flex items-center gap-2">
     <span>{esc(status_msg)}</span>
   </div>
-</div>'''
+</div>{auto_hide_script}'''
     return '<div id="sync-status"></div>'
 
 
@@ -471,7 +480,7 @@ class Handler(BaseHTTPRequestHandler):
         self._responder_com_calendario(self._parse_date(q.get("date", [""])[0]))
 
     def _sincronizar_google(self):
-        """Endpoint para sincronizar com Google Calendar."""
+        """Endpoint para sincronizar com Google Calendar (síncrono)."""
         if not agenda.GOOGLE_AVAILABLE:
             self._send(render_sync_status("Bibliotecas do Google Calendar não instaladas. Execute: pip install google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client"))
             return
@@ -483,22 +492,18 @@ class Handler(BaseHTTPRequestHandler):
         # Mostra loading
         self._send(render_sync_status("", is_loading=True))
         
-        # Executa sincronização em thread separada para não bloquear
-        def do_sync():
-            try:
-                # Envia eventos locais para o Google
-                agenda.sync_all_to_google()
-                # Busca eventos do Google que não estão localmente
-                agenda.sync_from_google()
-                msg = "Sincronização concluída com sucesso!"
-            except Exception as ex:
-                msg = f"Erro na sincronização: {str(ex)}"
-            
-            # Atualiza o status via HTMX (precisa de uma forma de notificar o cliente)
-            # Como estamos em thread separada, vamos apenas logar
-            print(f"[SYNC] {msg}")
+        # Executa sincronização de forma síncrona
+        try:
+            # Envia eventos locais para o Google
+            agenda.sync_all_to_google()
+            # Busca eventos do Google que não estão localmente
+            agenda.sync_from_google()
+            msg = "Sincronização concluída com sucesso!"
+        except Exception as ex:
+            msg = f"Erro na sincronização: {str(ex)}"
         
-        threading.Thread(target=do_sync, daemon=True).start()
+        # Retorna o status final (substitui o loading) com auto-hide para sucesso
+        self._send(render_sync_status(msg, auto_hide=True))
 
     def _responder_com_calendario(self, painel):
         # painel do dia (target) + calendario via swap-oob para atualizar os pontos
