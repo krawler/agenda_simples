@@ -62,43 +62,66 @@ python server.py --port 8080
 > a página é servida por este mini servidor Python. HTMX, Tailwind e daisyUI são
 > só front-end e continuam exatamente como pedido.
 
-## Lembretes por e-mail (opcional)
+## Lembretes por e-mail e Telegram (opcional)
 
-`notificador.py` envia um e-mail **30 minutos antes** de cada evento, com os
-detalhes do agendamento. Também é Python puro (stdlib `smtplib` + `email`) e usa
-o mesmo `eventos.json`.
+`notificador.py` envia notificações **em dois horários**:
+- **E-mail** 30 minutos antes (via SMTP)
+- **Telegram** 90 minutos (1h30) antes (via API do bot)
+
+Python puro (stdlib `smtplib`, `email`, `urllib`) e usa o mesmo `eventos.json`.
+Email e Telegram são independentes — configure um, outro ou ambos.
 
 ### Configuração
 
 Copie `.env.example` para `.env` e preencha (o `.env` fica fora do git):
 
+#### E-mail
+
 ```
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USER=seu_email@gmail.com
-SMTP_PASSWORD=sua_senha_de_app
+SMTP_PASSWORD=sua_senha_de_app    # Gmail: gere em https://myaccount.google.com/apppasswords
 SMTP_FROM=seu_email@gmail.com
-AGENDA_EMAIL_TO=destinatario@exemplo.com
+AGENDA_EMAIL_TO=seu_email@gmail.com
 ```
 
-> Gmail: gere uma **Senha de app** em https://myaccount.google.com/apppasswords
-> (a senha normal da conta não funciona via SMTP). Também dá para exportar as
-> variáveis no ambiente em vez de usar `.env`.
+#### Telegram
+
+```
+TELEGRAM_BOT_TOKEN=123456:ABCdefGHIjklmnoPQRstuvWXyz  # obtenha com @BotFather
+TELEGRAM_CHAT_ID=1234567890       # seu ID de usuário ou grupo
+```
+
+Para descobrir seu **chat_id**:
+1. Abra o Telegram e procure por `@BotFather`
+2. Digite `/newbot` e crie seu bot (vai receber um token)
+3. Escreva `/start` ao seu novo bot
+4. Abra https://api.telegram.org/bot{SEU_TOKEN}/getUpdates e procure `"id"` em `chat`
+
+Ou use um bot como `@userinfobot` para descobrir seu ID instantaneamente.
 
 ### Uso
 
 ```bash
-python notificador.py --test           # envia um e-mail de teste e sai
-python notificador.py --dry-run --once # mostra o e-mail que enviaria (não envia)
-python notificador.py                  # serviço: checa a cada 60s e envia
-python notificador.py --once           # checa uma vez e sai (Agendador/cron)
+# Testes
+python notificador.py --test                  # e-mail de teste
+python notificador.py --test-tg               # Telegram de teste
+python notificador.py --dry-run --once        # mostra o que seria enviado (não envia)
+
+# Produção
+python notificador.py                         # serviço: checa a cada 60s
+python notificador.py --once                  # checa uma vez e sai (Agendador/cron)
+python notificador.py --interval 30           # intervalo customizado
 ```
 
 - **Modo serviço** (`python notificador.py`): deixe rodando; verifica a cada 60s.
 - **Modo `--once`**: ideal para agendar no **Agendador de Tarefas do Windows**
   (ou cron) a cada 5–15 min — sem processo fixo em segundo plano.
-- Cada lembrete é enviado **uma única vez** (registro em `enviados.json`), mesmo
+- Cada notificação é enviada **uma única vez** (registro em `enviados.json`), mesmo
   reiniciando o serviço. Eventos recorrentes recebem um lembrete por ocorrência.
+- Falhas de conexão com Telegram não bloqueiam o serviço — será retentado no
+  próximo ciclo.
 
 ## Notas
 
