@@ -320,7 +320,7 @@ def render_page(sel):
         </select>
         <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-start sm:justify-end">
           <button class="btn btn-sm btn-ghost" hx-get="/alerts" hx-target="#alerts"
-            hx-swap="outerHTML">Mostrar próximo</button>
+            hx-swap="outerHTML">Próximo evento</button>
           <button class="btn btn-sm btn-primary" hx-post="/sync" hx-target="#sync-status"
             hx-swap="outerHTML" hx-indicator="#sync-indicator">☁ Sincronizar Google</button>
           <span id="sync-indicator" class="loading loading-spinner loading-sm htmx-indicator"></span>
