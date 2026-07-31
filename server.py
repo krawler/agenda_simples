@@ -254,42 +254,50 @@ def render_alerts_banner():
 
 
 def render_google_events_list(google_events):
-    """Renderiza lista de eventos do Google Calendar no estilo do cmd_alerts."""
-    if not google_events:
-        return '<div class="alert alert-info shadow-sm"><div class="flex items-center gap-2"><span>Nenhum evento encontrado no Google Calendar.</span></div></div>'
-    
-    agora = datetime.now()
-    linhas = []
-    for ge in google_events:
-        start = ge['start'].get('dateTime', ge['start'].get('date'))
-        try:
-            if 'T' in start:
-                occ = datetime.fromisoformat(start.replace('Z', '+00:00'))
-            else:
-                occ = datetime.fromisoformat(start + 'T00:00:00')
-        except:
-            occ = agora
-        
-        titulo = ge.get('summary', 'Sem título')
-        faltam = int((occ - agora).total_seconds() // 60)
-        if faltam < 0:
-            faltam_str = f"iniciou há {abs(faltam)} min"
-        else:
-            faltam_str = f"em {faltam} min"
-        
-        linhas.append(
-            f'<div class="flex items-center gap-2 p-1">'
-            f'<span class="badge badge-info">{esc(titulo)}</span>'
-            f'<span class="text-xs opacity-70">({faltam_str} - {occ:%d/%m %H:%M})</span>'
-            f'</div>'
-        )
-    
-    return f'''<div class="alert alert-info shadow-sm">
+  """Renderiza lista de eventos do Google Calendar no estilo do cmd_alerts."""
+  if not google_events:
+    return '<div class="alert alert-info shadow-sm"><div class="flex items-center gap-2"><span>Nenhum evento encontrado no Google Calendar.</span></div></div>'
+
+  agora = datetime.now()
+  linhas = []
+  for ge in google_events:
+    start = ge['start'].get('dateTime', ge['start'].get('date'))
+    try:
+      if 'T' in start:
+        occ = datetime.fromisoformat(start.replace('Z', '+00:00'))
+      else:
+        occ = datetime.fromisoformat(start + 'T00:00:00')
+    except Exception:
+      occ = agora
+
+    titulo = ge.get('summary', 'Sem título')
+    # Evita erro de timezone: aware só subtrai de aware; naive só de naive.
+    if occ.tzinfo is None:
+      referencia = agora
+      occ_fmt = occ
+    else:
+      referencia = datetime.now(occ.tzinfo)
+      occ_fmt = occ.astimezone()
+
+    faltam = int((occ - referencia).total_seconds() // 60)
+    if faltam < 0:
+      faltam_str = f"iniciou há {abs(faltam)} min"
+    else:
+      faltam_str = f"em {faltam} min"
+
+    linhas.append(
+      f'<div class="flex items-center gap-2 p-1">'
+      f'<span class="badge badge-info">{esc(titulo)}</span>'
+      f'<span class="text-xs opacity-70">({faltam_str} - {occ_fmt:%d/%m %H:%M})</span>'
+      f'</div>'
+    )
+
+  return f'''<div class="alert alert-info shadow-sm">
   <div class="flex items-center gap-2 mb-2">
-    <span class="font-semibold">Eventos do Google Calendar ({len(google_events)}):</span>
+  <span class="font-semibold">Eventos do Google Calendar ({len(google_events)}):</span>
   </div>
   <div class="space-y-1 max-h-60 overflow-y-auto">
-    {"".join(linhas)}
+  {"".join(linhas)}
   </div>
 </div>'''
 
