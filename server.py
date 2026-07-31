@@ -103,6 +103,25 @@ def render_calendar(ano, mes, sel):
 </div>'''
 
 
+def render_controls():
+    """Renderiza os controles (tema, botões) para ficar abaixo do calendário."""
+    return f'''<div class="card bg-base-100 shadow-md p-4">
+  <div class="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full">
+    <select id="tema" onchange="trocarTema(this.value)"
+      class="select select-bordered select-sm w-full sm:w-auto" title="Tema">
+      {"".join(f'<option value="{t}">{t}</option>' for t in TEMAS)}
+    </select>
+    <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-start sm:justify-end">
+      <button class="btn btn-sm btn-ghost" hx-get="/alerts" hx-target="#alerts"
+        hx-swap="outerHTML">Próximo evento</button>
+      <button class="btn btn-sm btn-primary" hx-post="/sync" hx-target="#sync-status"
+        hx-swap="outerHTML" hx-indicator="#sync-indicator">☁ Sincronizar Google</button>
+      <span id="sync-indicator" class="loading loading-spinner loading-sm htmx-indicator"></span>
+    </div>
+  </div>
+</div>'''
+
+
 def render_evento_item(occ, e):
     dur = ""
     if e.get("dur"):
@@ -362,26 +381,16 @@ def render_page(sel):
 </head>
 <body class="bg-base-200 min-h-screen">
   <div class="max-w-5xl mx-auto p-4 space-y-4">
-    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <header class="flex items-center justify-between gap-4">
       <h1 class="text-2xl font-bold">📅 Agenda Simples</h1>
-      <div class="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
-        <select id="tema" onchange="trocarTema(this.value)"
-          class="select select-bordered select-sm w-full sm:w-auto" title="Tema">
-          {"".join(f'<option value="{t}">{t}</option>' for t in TEMAS)}
-        </select>
-        <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-start sm:justify-end">
-          <button class="btn btn-sm btn-ghost" hx-get="/alerts" hx-target="#alerts"
-            hx-swap="outerHTML">Próximo evento</button>
-          <button class="btn btn-sm btn-primary" hx-post="/sync" hx-target="#sync-status"
-            hx-swap="outerHTML" hx-indicator="#sync-indicator">☁ Sincronizar Google</button>
-          <span id="sync-indicator" class="loading loading-spinner loading-sm htmx-indicator"></span>
-        </div>
-      </div>
-    </div>
+    </header>
     {render_alerts_banner()}
     {render_sync_status()}
     <div class="grid md:grid-cols-2 gap-4 items-start">
-      {render_calendar(sel.year, sel.month, sel)}
+      <div class="space-y-4">
+        {render_calendar(sel.year, sel.month, sel)}
+        {render_controls()}
+      </div>
       {render_day_panel(sel)}
     </div>
   </div>
