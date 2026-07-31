@@ -295,11 +295,11 @@ def render_google_events_list(google_events):
     return f'''<div id="google-events-list" class="alert alert-info shadow-sm">
   <div class="flex items-center justify-between mb-2">
     <span class="font-semibold">Eventos do Google Calendar ({len(google_events)}):</span>
-    <button type="button" class="btn btn-xs btn-ghost btn-circle" onclick="this.closest('#google-events-list').remove()" title="Fechar">✕</button>
   </div>
   <div class="space-y-1 max-h-60 overflow-y-auto">
     {"".join(linhas)}
   </div>
+  <button type="button" class="btn btn-xs btn-ghost btn-circle" onclick="this.closest('#google-events-list').remove()" title="Fechar">✕</button>
 </div>'''
 
 
