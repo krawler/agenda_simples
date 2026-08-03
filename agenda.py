@@ -195,7 +195,7 @@ def formatar(e, ini):
     linha += f"  {e['titulo']}"
     if e.get("repeat"):
         rep = e["repeat"]
-        linha += f"  ({rep}{' ate ' e['until'] if e.get('until') else ''})"
+        linha += f"  ({rep}{' ate '['until'] if e.get('until') else ''})"
     if e.get("desc"):
         linha += f"  — {e['desc']}"
     return linha
@@ -496,8 +496,6 @@ def sync_all_and_get_results():
     google_ids_remotos = {ge['id'] for ge in google_events_remotos}
 
     # 2. Sincroniza local -> Google (Exportar)
-    # Vamos identificar quais eventos locais NÃO têm google_id ou cujo google_id não está no Google
-    # Mas para simplificar a interface, vamos considerar "exportados" os que foram sincronizados com sucesso.
     synced_ids = []
     errors = 0
     
@@ -516,8 +514,6 @@ def sync_all_and_get_results():
     importados_count = 0
     for ge in google_events_remotos:
         if not find_local_event_by_google_id(eventos_locais, ge['id']):
-            # Aqui apenas simulamos a importação para a interface ver o que "entrou"
-            # Na prática, o sync_from_google já faz o trabalho de salvar no DB
             importados_count += 1
     
     # Executa a importação real
@@ -527,6 +523,7 @@ def sync_all_and_get_results():
     
     # Retorna os dados para o server.py
     # Para a interface, vamos retornar os eventos do Google que acabaram de ser "vistos"
+    # e os IDs que foram sincronizados com sucesso para o Google.
     return msg, google_events_remotos, synced_ids
 
 

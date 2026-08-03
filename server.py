@@ -218,7 +218,7 @@ def render_day_panel(d, editando=None):
                  'neste dia.</div>')
     iso = d.isoformat()
     opts = "".join(
-        f'<option value="{r}"{" selected" if r == "none" else ""}>'
+        f'<option value="{r}"{" selected" if r == (e.get("repeat") or "none") else ""}>'
         f'{"sem repetição" if r == "none" else r}</option>'
         for r in agenda.REPEATS)
 
@@ -272,13 +272,22 @@ def render_alerts_banner():
             f'<span class="font-semibold">Próximos 30 min:</span>{linhas}</div></div>')
 
 
-def render_google_events_list(google_events):
-    """Renderiza lista de eventos do Google Calendar no estilo do cmd_alerts."""
+def render_google_events_list(google_events, mode="importados"):
+    """
+    Renderiza lista de eventos do Google Calendar.
+    mode="importados": Eventos vindos do Google (azul/info)
+    mode="exportados": Eventos que foram sincronizados para o Google (verde/success)
+    """
     if not google_events:
-        return '<div class="alert alert-info shadow-sm"><div class="flex items-center gap-2"><span>Nenhum evento encontrado no Google Calendar.</span></div></div>'
+        return f'<div class="alert alert-base-200 shadow-sm"><div class="flex items-center gap-2"><span class="opacity-50">Nenhum evento encontrado no Google Calendar.</span></div></div>'
 
     agora = datetime.now()
     linhas = []
+    
+    # Define cores baseadas no modo
+    alert_class = "alert-info" if mode == "importados" else "alert-success"
+    titulo_header = "Eventos Importados do Google" if mode == "importados" else "Eventos Exportados para o Google"
+
     for ge in google_events:
         start = ge['start'].get('dateTime', ge['start'].get('date'))
         try:
@@ -290,7 +299,6 @@ def render_google_events_list(google_events):
             occ = agora
 
         titulo = ge.get('summary', 'Sem título')
-        # Evita erro de timezone: aware só subtrai de aware; naive só de naive.
         if occ.tzinfo is None:
             referencia = agora
             occ_fmt = occ
@@ -306,24 +314,24 @@ def render_google_events_list(google_events):
 
         linhas.append(
             f'<div class="flex items-center gap-2 p-1">'
-            f'<span class="badge badge-info">{esc(titulo)}</span>'
+            f'<span class="badge badge-secondary gap-1">{esc(titulo)}</span>'
             f'<span class="text-xs opacity-70">({faltam_str} - {occ_fmt:%d/%m %H:%M})</span>'
             f'</div>'
         )
 
-    return f'''<div id="google-events-list" class="alert alert-info shadow-sm">
+    return f'''<div id="google-events-list-{mode}" class="alert {alert_class} shadow-sm">
   <div class="flex items-center justify-between mb-2">
-    <span class="font-semibold">Eventos do Google Calendar ({len(google_events)}):</span>
+    <span class="font-semibold">{titulo_header} ({len(google_events)}):</span>
   </div>
-  <div class="space-y-1 max-h-60 overflow-y-auto">
+  <div class="space-y-1 max-h-40 overflow-y-auto">
     {"".join(linhas)}
   </div>
-  <button type="button" class="btn btn-xs btn-ghost btn-circle" onclick="this.closest('#google-events-list').remove()" title="Fechar">✕</button>
+  <button type="button" class="btn btn-xs btn-ghost btn-circle" onclick="this.closest('#google-events-list-{mode}').remove()" title="Fechar">✕</button>
 </div>'''
 
 
-def render_sync_status(status_msg="", is_loading=False, auto_hide=False, google_events_html=""):
-    """Renderiza o status da sincronização."""
+def render_sync_status(status_msg="", is_loading=False, auto_hide=False, google_events_importados=None, google_events_exportados=None):
+    """Renderiza o status da sincronização e os dois quadros de eventos."""
     if is_loading:
         return f'''<div id="sync-status" class="alert alert-info shadow-sm">
   <div class="flex items-center gap-2">
@@ -331,7 +339,10 @@ def render_sync_status(status_msg="", is_loading=False, auto_hide=False, google_
     <span>Sincronizando com Google Calendar...</span>
   </div>
 </div>'''
-    elif status_msg:
+    
+    html_output = []
+    
+    if status_msg:
         alert_class = "alert-success" if "sucesso" in status_msg.lower() or "conclu" in status_msg.lower() else "alert-error"
         auto_hide_script = ''
         if auto_hide and "sucesso" in status_msg.lower():
@@ -342,14 +353,23 @@ def render_sync_status(status_msg="", is_loading=False, auto_hide=False, google_
         if (el) el.remove();
       }, 3000);
     </script>'''
-        return f'''<div id="sync-status" class="alert {alert_class} shadow-sm">
+        html_output.append(f'''<div id="sync-status" class="alert {alert_class} shadow-sm">
   <div class="flex items-center gap-2">
     <span>{esc(status_msg)}</span>
   </div>
 </div>
-{google_events_html}
-{auto_hide_script}'''
-    return '<div id="sync-status"></div>'
+{auto_hide_script}''')
+    else:
+        html_output.append('<div id="sync-status"></div>')
+
+    # Renderiza quadros de eventos se existirem
+    if google_events_importados is not None:
+        html_output.append(render_google_events_list(google_events_importados, mode="importados"))
+    
+    if google_events_exportados is not None:
+        html_output.append(render_google_events_list(google_events_exportados, mode="exportados"))
+
+    return "".join(html_output)
 
 
 def render_page(sel):
@@ -363,7 +383,6 @@ def render_page(sel):
   <link href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" rel="stylesheet">
   <script src="https://unpkg.com/htmx.org@1.9.12"></script>
   <script>
-    // aplica o tema salvo antes de renderizar (evita flash)
     (function () {{
       var t = localStorage.getItem("tema");
       if (t) document.documentElement.setAttribute("data-theme", t);
@@ -384,8 +403,12 @@ def render_page(sel):
     <header class="flex items-center justify-between gap-4">
       <h1 class="text-2xl font-bold">📅 Agenda Simples</h1>
     </header>
-    {render_alerts_banner()}
-    {render_sync_status()}
+    <div id="alerts-container">
+        {render_alerts_banner()}
+    </div>
+    <div id="sync-container">
+        {render_sync_status()}
+    </div>
     <div class="grid md:grid-cols-2 gap-4 items-start">
       <div class="space-y-4">
         {render_calendar(sel.year, sel.month, sel)}
@@ -437,7 +460,6 @@ class Handler(BaseHTTPRequestHandler):
                 except ValueError:
                     ano = date.today().year
                     mes = date.today().month
-                    # Clamp month to valid range
                     mes = max(1, min(12, mes))
                     sel = self._parse_date(q.get("sel", [""])[0])
                     self._send(render_calendar(ano, mes, sel))
@@ -518,12 +540,11 @@ class Handler(BaseHTTPRequestHandler):
         eventos = agenda.carregar()
         evento = next((x for x in eventos if x["id"] == eid), None)
         if evento and agenda.GOOGLE_AVAILABLE and evento.get("google_id"):
-            # Tenta remover do Google Calendar
             try:
                 agenda.delete_event_from_google(evento)
             except:
                 pass
-        eventos = [e for e in agenda.carregar() if e["id"] != eid]
+        eventos = [e for e in agenda.carregar() if e["id"]!= eid]
         agenda.salvar(eventos)
         painel = self._parse_date(q.get("date", [""])[0])
         self._responder_com_calendario(painel)
@@ -541,13 +562,10 @@ class Handler(BaseHTTPRequestHandler):
         self._responder_com_calendario(self._parse_date(q.get("date", [""])[0]))
 
     def _fetch_google_events(self):
-        """Busca eventos do Google Calendar para exibição."""
         if not agenda.GOOGLE_AVAILABLE:
             return []
-        
         try:
             service = agenda.get_google_service()
-            # Busca eventos dos últimos 30 dias até 30 dias no futuro
             time_min = datetime.now() - timedelta(days=30)
             time_max = datetime.now() + timedelta(days=30)
             return agenda.get_google_events(service, time_min, time_max)
@@ -556,40 +574,43 @@ class Handler(BaseHTTPRequestHandler):
             return []
 
     def _sincronizar_google(self):
-        """Endpoint para sincronizar com Google Calendar (síncrono)."""
         if not agenda.GOOGLE_AVAILABLE:
-            self._send(render_sync_status("Bibliotecas do Google Calendar não instaladas. Execute: pip install google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client"))
+            self._send(render_sync_status("Bibliotecas do Google Calendar não instaladas."))
             return
         
         if not agenda.GOOGLE_CREDENTIALS_FILE.exists():
-            self._send(render_sync_status("Arquivo credentials.json não encontrado. Configure no Google Cloud Console."))
+            self._send(render_sync_status("Arquivo credentials.json não encontrado."))
             return
         
-        # Primeiro, busca eventos do Google para exibir
-        google_events = self._fetch_google_events()
-        google_events_html = render_google_events_list(google_events)
+        # Executa a sincronização e obtém os resultados detalhados
+        msg, google_events_remotos, synced_ids = agenda.sync_all_and_get_results()
         
-        # Executa sincronização de forma síncrona
-        try:
-            # Envia eventos locais para o Google
-            agenda.sync_all_to_google()
-            # Busca eventos do Google que não estão localmente
-            agenda.sync_from_google()
-            msg = "Sincronização concluída com sucesso!"
-        except Exception as ex:
-            msg = f"Erro na sincronização: {str(ex)}"
-        
-        # Retorna o status final com a lista de eventos do Google
-        self._send(render_sync_status(msg, auto_hide=True, google_events_html=google_events_html))
+        # Para a interface, vamos considerar "exportados" os que foram sincronizados com sucesso
+        # (ou seja, eventos locais que agora têm um google_id correspondente ao que foi enviado)
+        # Como o agenda.py retorna os IDs sincronizados, vamos buscar os objetos para a lista
+        eventos_locais = agenda.carregar()
+        google_events_exportados = []
+        for eid in synced_ids:
+            e = next((x for x in eventos_locais if x["id"] == eid), None)
+            if e:
+                # Criamos um objeto fake para a renderização visual
+                google_events_exportados.append({
+                    'ummary': e['titulo'],
+                    'tart': {'dateTime': f"{e['inicio'].replace(' ', 'T')}+00:00"},
+                    'end': {'dateTime': f"{e['inicio'].replace(' ', 'T')}+01:00"}
+                })
+
+        self._send(render_sync_status(msg, auto_hide=True, 
+                                     google_events_importados=google_events_remotos,
+                                     google_events_exportados=google_events_exportados))
 
     def _responder_com_calendario(self, painel):
-        # painel do dia (target) + calendario via swap-oob para atualizar os pontos
         cal_html = render_calendar(painel.year, painel.month, painel)
         cal_oob = cal_html.replace('id="calendar"',
                                    'id="calendar" hx-swap-oob="true"', 1)
         self._send(render_day_panel(painel) + cal_oob)
 
-    def log_message(self, *a):  # silencia log padrao ruidoso
+    def log_message(self, *a):
         pass
 
 
