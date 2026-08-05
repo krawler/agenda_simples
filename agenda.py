@@ -195,7 +195,7 @@ def formatar(e, ini):
     linha += f"  {e['titulo']}"
     if e.get("repeat"):
         rep = e["repeat"]
-        linha += f"  ({rep}{' ate '['until'] if e.get('until') else ''})"
+        linha += f"  ({rep}{' ate '[e.get('until')] if e.get('until') else ''})"
     if e.get("desc"):
         linha += f"  — {e['desc']}"
     return linha

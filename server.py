@@ -218,7 +218,7 @@ def render_day_panel(d, editando=None):
                  'neste dia.</div>')
     iso = d.isoformat()
     opts = "".join(
-        f'<option value="{r}"{" selected" if r == (e.get("repeat") or "none") else ""}>'
+        f'<option value="{r}"{" selected" if r == "repeat" or r == "none" else ""}>'
         f'{"sem repetição" if r == "none" else r}</option>'
         for r in agenda.REPEATS)
 
