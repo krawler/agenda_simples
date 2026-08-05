@@ -366,7 +366,7 @@ def find_local_event_by_google_id(eventos, google_id):
 def sync_all_to_google():
     """Sincroniza todos os eventos locais para o Google Calendar.
     Retorna: (eventos_exportados, erros)
-    eventos_exportados = lista de dicts com info dos eventos sincronizados
+    eventos_exportados = lista de dicts com info dos eventos NOVAMENTE CRIADOS no Google
     """
     if not GOOGLE_AVAILABLE:
         print("Bibliotecas do Google Calendar não instaladas.")
@@ -386,20 +386,22 @@ def sync_all_to_google():
         # Tenta sincronizar: se tem google_id e ele existe no Google, atualiza; senão cria novo
         success, action = sync_event_to_google(e)
         if success:
-            exportados.append({
-                "id": e["id"],
-                "titulo": e["titulo"],
-                "inicio": e["inicio"],
-                "google_id": e["google_id"],
-                "action": action  # "created" ou "updated"
-            })
+            # Só adiciona à lista de exportados se foi CRIADO (não se foi apenas atualizado)
+            if action == "created":
+                exportados.append({
+                    "id": e["id"],
+                    "titulo": e["titulo"],
+                    "inicio": e["inicio"],
+                    "google_id": e["google_id"],
+                    "action": action
+                })
         else:
             errors += 1
     
     if exportados or errors > 0:
         salvar(eventos)
     
-    print(f"Exportação para Google concluída: {len(exportados)} eventos, {errors} erros.")
+    print(f"Exportação para Google concluída: {len(exportados)} eventos novos, {errors} erros.")
     return exportados, errors
 
 
@@ -503,7 +505,7 @@ def sync_all_and_get_results():
     """
     Sincroniza eventos com Google Calendar (bidirecional) e retorna resultados detalhados.
     Retorna: (status_msg, exportados, importados)
-    - exportados: lista de eventos locais sincronizados para o Google
+    - exportados: lista de eventos locais NOVAMENTE CRIADOS no Google
     - importados: lista de eventos do Google importados para o local
     """
     if not GOOGLE_AVAILABLE:
