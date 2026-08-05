@@ -195,7 +195,7 @@ def formatar(e, ini):
     linha += f"  {e['titulo']}"
     if e.get("repeat"):
         rep = e["repeat"]
-        linha += f"  ({rep}{' ate '[e.get('until')] if e.get('until') else ''})"
+        linha += f"  ({rep}{' ate ' + e.get('until') if e.get('until') else ''})"
     if e.get("desc"):
         linha += f"  — {e['desc']}"
     return linha
@@ -230,8 +230,8 @@ def event_to_google_event(e, occ):
     fim = inicio + timedelta(minutes=e["dur"]) if e.get("dur") else inicio + timedelta(hours=1)
     
     google_event = {
-        'ummary': e["titulo"],
-        'tart': {
+        'summary': e["titulo"],
+        'start': {
             'dateTime': inicio.isoformat(),
             'timeZone': 'America/Sao_Paulo',
         },
@@ -245,7 +245,7 @@ def event_to_google_event(e, occ):
         google_event['description'] = e["desc"]
     
     # Handle recurrence
-    if e.get("repeat") and e["repeat"]!= "none":
+    if e.get("repeat") and e["repeat"] != "none":
         rrule = []
         rep = e["repeat"]
         if rep == "daily":
@@ -287,7 +287,7 @@ def sync_event_to_google(e, occ=None):
                     body=google_event
                 ).execute()
                 e["google_id"] = updated['id']
-                return True
+                return True, "updated"
             except HttpError as error:
                 if error.resp.status == 404:
                     # Evento não existe mais no Google, cria novo
@@ -301,10 +301,10 @@ def sync_event_to_google(e, occ=None):
             body=google_event
         ).execute()
         e["google_id"] = created['id']
-        return True
+        return True, "created"
     except Exception as ex:
         print(f"Erro ao sincronizar evento {e['id']} com Google Calendar: {ex}")
-        return False
+        return False, "error"
 
 
 def delete_event_from_google(e):
@@ -355,47 +355,53 @@ def find_local_event_by_google_id(eventos, google_id):
 
 
 def sync_all_to_google():
-    """Sincroniza todos os eventos locais para o Google Calendar."""
+    """Sincroniza todos os eventos locais para o Google Calendar.
+    Retorna: (eventos_exportados, erros)
+    eventos_exportados = lista de dicts com info dos eventos sincronizados
+    """
     if not GOOGLE_AVAILABLE:
         print("Bibliotecas do Google Calendar não instaladas.")
-        return False
+        return [], 0
     
     eventos = carregar()
     service = get_google_service()
     
-    # Busca eventos existentes no Google para evitar duplicatas
+    # Busca eventos existentes no Google para saber quais já existem lá
     google_events = get_google_events(service)
-    google_ids = {ge['id'] for ge in google_events}
+    google_ids_remotos = {ge['id'] for ge in google_events}
     
-    synced = 0
+    exportados = []
     errors = 0
     
     for e in eventos:
-        if e.get("google_id") and e["google_id"] in google_ids:
-            # Já existe, atualiza
-            if sync_event_to_google(e):
-                synced += 1
-            else:
-                errors += 1
-        elif not e.get("google_id"):
-            # Novo evento, cria
-            if sync_event_to_google(e):
-                synced += 1
-            else:
-                errors += 1
+        # Tenta sincronizar: se tem google_id e ele existe no Google, atualiza; senão cria novo
+        success, action = sync_event_to_google(e)
+        if success:
+            exportados.append({
+                "id": e["id"],
+                "titulo": e["titulo"],
+                "inicio": e["inicio"],
+                "google_id": e["google_id"],
+                "action": action  # "created" ou "updated"
+            })
+        else:
+            errors += 1
     
-    if synced > 0 or errors > 0:
+    if exportados or errors > 0:
         salvar(eventos)
     
-    print(f"Sincronização concluída: {synced} eventos sincronizados, {errors} erros.")
-    return errors == 0
+    print(f"Exportação para Google concluída: {len(exportados)} eventos, {errors} erros.")
+    return exportados, errors
 
 
 def sync_from_google():
-    """Busca eventos do Google Calendar que não estão na agenda local e adiciona."""
+    """Busca eventos do Google Calendar que não estão na agenda local e adiciona.
+    Retorna: (eventos_importados, erros)
+    eventos_importados = lista de eventos do Google que foram importados
+    """
     if not GOOGLE_AVAILABLE:
         print("Bibliotecas do Google Calendar não instaladas.")
-        return False
+        return [], 0
     
     eventos = carregar()
     service = get_google_service()
@@ -406,8 +412,11 @@ def sync_from_google():
     
     google_events = get_google_events(service, time_min, time_max)
     
-    added = 0
+    importados = []
+    errors = 0
+    
     for ge in google_events:
+        # Verifica se já existe localmente pelo google_id
         if find_local_event_by_google_id(eventos, ge['id']):
             continue  # Já existe localmente
         
@@ -431,7 +440,7 @@ def sync_from_google():
             # Detecta recorrência
             repeat = None
             until = None
-            if 'ecurrence' in ge:
+            if 'recurrence' in ge:
                 for rule in ge['recurrence']:
                     if rule.startswith('RRULE:'):
                         rrule = rule[6:]
@@ -442,7 +451,7 @@ def sync_from_google():
                         elif 'FREQ=WEEKLY' in rrule:
                             repeat = 'weekly'
                         elif 'FREQ=MONTHLY' in rrule:
-                            repeat = 'onthly'
+                            repeat = 'monthly'
                         
                         if 'UNTIL=' in rrule:
                             until_str = rrule.split('UNTIL=')[1].split(';')[0]
@@ -462,23 +471,31 @@ def sync_from_google():
                 "google_id": ge['id']
             }
             eventos.append(evento)
-            added += 1
+            importados.append({
+                "id": evento["id"],
+                "titulo": evento["titulo"],
+                "inicio": evento["inicio"],
+                "google_id": ge['id']
+            })
         except Exception as ex:
             print(f"Erro ao converter evento do Google: {ex}")
+            errors += 1
     
-    if added > 0:
+    if importados:
         salvar(eventos)
-        print(f"{added} eventos importados do Google Calendar.")
+        print(f"{len(importados)} eventos importados do Google Calendar.")
     else:
         print("Nenhum evento novo para importar do Google Calendar.")
     
-    #return True
+    return importados, errors
 
 
 def sync_all_and_get_results():
     """
-    Sincroniza eventos com Google Calendar e retorna os resultados para a interface.
-    Retorna: (status_msg, google_events_importados, google_events_exportados)
+    Sincroniza eventos com Google Calendar (bidirecional) e retorna resultados detalhados.
+    Retorna: (status_msg, exportados, importados)
+    - exportados: lista de eventos locais sincronizados para o Google
+    - importados: lista de eventos do Google importados para o local
     """
     if not GOOGLE_AVAILABLE:
         return "Bibliotecas do Google Calendar não instaladas.", [], []
@@ -486,45 +503,20 @@ def sync_all_and_get_results():
     if not GOOGLE_CREDENTIALS_FILE.exists():
         return "Arquivo de credenciais não encontrado.", [], []
     
-    eventos_locais = carregar()
-    service = get_google_service()
+    print("Sincronizando com Google Calendar...")
     
-    # 1. Busca eventos do Google para saber o que já existe lá (para evitar duplicatas na importação)
-    time_min = datetime.now() - timedelta(days=30)
-    time_max = datetime.now() + timedelta(days=30)
-    google_events_remotos = get_google_events(service, time_min, time_max)
-    google_ids_remotos = {ge['id'] for ge in google_events_remotos}
-
-    # 2. Sincroniza local -> Google (Exportar)
-    synced_ids = []
-    errors = 0
+    # 1. Exporta eventos locais para o Google
+    print("Enviando eventos locais para Google Calendar...")
+    exportados, export_errors = sync_all_to_google()
     
-    for e in eventos_locais:
-        # Se não tem google_id ou o google_id não está no Google, tenta sincronizar
-        if not e.get("google_id") or e["google_id"] not in google_ids_remotos:
-            if sync_event_to_google(e):
-                synced_ids.append(e["id"])
-            else:
-                errors += 1
+    # 2. Importa eventos do Google que não estão no local
+    print("Buscando eventos do Google Calendar não presentes localmente...")
+    importados, import_errors = sync_from_google()
     
-    salvar(eventos_locais)
-
-    # 3. Sincroniza Google -> Local (Importar)
-    # Vamos identificar quais eventos do Google não estão no local
-    importados_count = 0
-    for ge in google_events_remotos:
-        if not find_local_event_by_google_id(eventos_locais, ge['id']):
-            importados_count += 1
+    total_errors = export_errors + import_errors
+    msg = "Sincronização concluída com sucesso!" if total_errors == 0 else f"Sincronização concluída com {total_errors} erro(s)."
     
-    # Executa a importação real
-    sync_from_google()
-
-    msg = "Sincronização concluída!" if errors == 0 else f"Sincronização concluída com {errors} erros."
-    
-    # Retorna os dados para o server.py
-    # Para a interface, vamos retornar os eventos do Google que acabaram de ser "vistos"
-    # e os IDs que foram sincronizados com sucesso para o Google.
-    return msg, google_events_remotos, synced_ids
+    return msg, exportados, importados
 
 
 # ------------------------------------------------------------------------ main
@@ -551,7 +543,7 @@ def cmd_new(args):
     
     # Sincroniza com Google Calendar se disponível
     if GOOGLE_AVAILABLE and GOOGLE_CREDENTIALS_FILE.exists():
-        if sync_event_to_google(evento):
+        if sync_event_to_google(evento)[0]:
             salvar(eventos)
             print("Evento sincronizado com Google Calendar.")
         else:
@@ -591,7 +583,7 @@ def cmd_edit(args):
     
     # Sincroniza com Google Calendar se disponível
     if GOOGLE_AVAILABLE and GOOGLE_CREDENTIALS_FILE.exists():
-        if sync_event_to_google(evento):
+        if sync_event_to_google(evento)[0]:
             salvar(eventos)
             print("Evento sincronizado com Google Calendar.")
         else:
@@ -673,7 +665,7 @@ def cmd_rm(args):
     if GOOGLE_AVAILABLE and GOOGLE_CREDENTIALS_FILE.exists() and evento.get("google_id"):
         delete_event_from_google(evento)
     
-    novos = [e for e in eventos if e["id"]!= args.id]
+    novos = [e for e in eventos if e["id"] != args.id]
     salvar(novos)
     print(f"Evento {args.id} removido.")
 

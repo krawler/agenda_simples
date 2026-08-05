@@ -289,7 +289,16 @@ def render_google_events_list(google_events, mode="importados"):
     titulo_header = "Eventos Importados do Google" if mode == "importados" else "Eventos Exportados para o Google"
 
     for ge in google_events:
-        start = ge['start'].get('dateTime', ge['start'].get('date'))
+        # ge pode ser um evento do Google (dict com 'start', 'summary') ou um dict simplificado nosso
+        if 'start' in ge and 'summary' in ge:
+            # Evento real do Google Calendar
+            start = ge['start'].get('dateTime', ge['start'].get('date'))
+            titulo = ge.get('summary', 'Sem título')
+        else:
+            # Nosso dict simplificado (exportados)
+            start = ge.get('inicio', '')
+            titulo = ge.get('titulo', 'Sem título')
+        
         try:
             if 'T' in start:
                 occ = datetime.fromisoformat(start.replace('Z', '+00:00'))
@@ -298,7 +307,6 @@ def render_google_events_list(google_events, mode="importados"):
         except Exception:
             occ = agora
 
-        titulo = ge.get('summary', 'Sem título')
         if occ.tzinfo is None:
             referencia = agora
             occ_fmt = occ
@@ -544,7 +552,7 @@ class Handler(BaseHTTPRequestHandler):
                 agenda.delete_event_from_google(evento)
             except:
                 pass
-        eventos = [e for e in agenda.carregar() if e["id"]!= eid]
+        eventos = [e for e in agenda.carregar() if e["id"] != eid]
         agenda.salvar(eventos)
         painel = self._parse_date(q.get("date", [""])[0])
         self._responder_com_calendario(painel)
@@ -561,18 +569,6 @@ class Handler(BaseHTTPRequestHandler):
             agenda.salvar(eventos)
         self._responder_com_calendario(self._parse_date(q.get("date", [""])[0]))
 
-    def _fetch_google_events(self):
-        if not agenda.GOOGLE_AVAILABLE:
-            return []
-        try:
-            service = agenda.get_google_service()
-            time_min = datetime.now() - timedelta(days=30)
-            time_max = datetime.now() + timedelta(days=30)
-            return agenda.get_google_events(service, time_min, time_max)
-        except Exception as ex:
-            print(f"Erro ao buscar eventos do Google: {ex}")
-            return []
-
     def _sincronizar_google(self):
         if not agenda.GOOGLE_AVAILABLE:
             self._send(render_sync_status("Bibliotecas do Google Calendar não instaladas."))
@@ -582,27 +578,13 @@ class Handler(BaseHTTPRequestHandler):
             self._send(render_sync_status("Arquivo credentials.json não encontrado."))
             return
         
-        # Executa a sincronização e obtém os resultados detalhados
-        msg, google_events_remotos, synced_ids = agenda.sync_all_and_get_results()
+        # Executa a sincronização bidirecional e obtém os resultados detalhados
+        msg, exportados, importados = agenda.sync_all_and_get_results()
         
-        # Para a interface, vamos considerar "exportados" os que foram sincronizados com sucesso
-        # (ou seja, eventos locais que agora têm um google_id correspondente ao que foi enviado)
-        # Como o agenda.py retorna os IDs sincronizados, vamos buscar os objetos para a lista
-        eventos_locais = agenda.carregar()
-        google_events_exportados = []
-        for eid in synced_ids:
-            e = next((x for x in eventos_locais if x["id"] == eid), None)
-            if e:
-                # Criamos um objeto fake para a renderização visual
-                google_events_exportados.append({
-                    'ummary': e['titulo'],
-                    'tart': {'dateTime': f"{e['inicio'].replace(' ', 'T')}+00:00"},
-                    'end': {'dateTime': f"{e['inicio'].replace(' ', 'T')}+01:00"}
-                })
-
+        # Envia resposta com os dois painéis
         self._send(render_sync_status(msg, auto_hide=True, 
-                                     google_events_importados=google_events_remotos,
-                                     google_events_exportados=google_events_exportados))
+                                     google_events_importados=importados,
+                                     google_events_exportados=exportados))
 
     def _responder_com_calendario(self, painel):
         cal_html = render_calendar(painel.year, painel.month, painel)
