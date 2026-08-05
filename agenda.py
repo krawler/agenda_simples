@@ -28,7 +28,7 @@ import calendar
 import json
 import sys
 import os
-from datetime import datetime, time, timedelta
+from datetime import datetime, date, time, timedelta
 from pathlib import Path
 
 # Garante saida UTF-8 mesmo em consoles Windows (cp1252).
@@ -226,8 +226,17 @@ def get_google_service():
 
 def event_to_google_event(e, occ):
     """Converte evento local para formato do Google Calendar."""
+    # Garante que occ é um datetime, não apenas uma date
+    if isinstance(occ, date) and not isinstance(occ, datetime):
+        occ = datetime.combine(occ, time(9, 0))
+    
     inicio = occ
     fim = inicio + timedelta(minutes=e["dur"]) if e.get("dur") else inicio + timedelta(hours=1)
+    
+     # Adiciona verificação para garantir que fim também é datetime
+    if isinstance(fim, date) and not isinstance(fim, datetime):
+        fim = datetime.combine(fim, time(17, 0))
+    
     
     google_event = {
         'summary': e["titulo"],
