@@ -278,9 +278,11 @@ def render_google_events_list(google_events, mode="importados"):
     mode="importados": Eventos vindos do Google (azul/info)
     mode="exportados": Eventos que foram sincronizados para o Google (verde/success)
     """
-    if not google_events:
+    if not google_events and mode == "importados":
         return f'<div class="alert alert-base-200 shadow-sm"><div class="flex items-center gap-2"><span class="opacity-50">Nenhum evento encontrado no Google Calendar.</span></div></div>'
-
+    elif not google_events and mode == "exportados":
+        return f'<div class="alert alert-base-200 shadow-sm"><div class="flex items-center gap-2"><span class="opacity-50">Nenhum evento encontrado no calendário local.</span></div></div>'
+    
     agora = datetime.now()
     linhas = []
     
