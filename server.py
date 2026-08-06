@@ -382,69 +382,8 @@ def render_sync_status(status_msg="", is_loading=False, auto_hide=False, google_
     return "".join(html_output)
 
 
-def render_page(sel):
-    return f'''<!DOCTYPE html>
-<html lang="pt-br" data-theme="light">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Agenda Simples</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" rel="stylesheet">
-  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
-  <script>
-    (function () {{
-      var t = localStorage.getItem("tema");
-      if (t) document.documentElement.setAttribute("data-theme", t);
-    }})();
-    function trocarTema(v) {{
-      document.documentElement.setAttribute("data-theme", v);
-      localStorage.setItem("tema", v);
-    }}
-    document.addEventListener("DOMContentLoaded", function () {{
-      var sel = document.getElementById("tema");
-      var t = localStorage.getItem("tema");
-      if (sel && t) sel.value = t;
-    }});
-  </script>
-</head>
-<body class="bg-base-200 min-h-screen">
-  <div class="max-w-5xl mx-auto p-4 space-y-4">
-    <header class="flex items-center justify-between gap-4">
-      <h1 class="text-2xl font-bold">📅 Agenda Simples</h1>
-    </header>
-    <div id="alerts-container">
-        {render_alerts_banner()}
-    </div>
-    <div id="sync-container">
-        {render_sync_status()}
-    </div>
-    <div class="grid md:grid-cols-2 gap-4 items-start">
-      <div class="space-y-4">
-        {render_calendar(sel.year, sel.month, sel)}
-        {render_controls()}
-      </div>
-      {render_day_panel(sel)}
-    </div>
-  </div>
-
-  <!-- Modal de confirmação para duração vazia -->
-  <dialog id="duracao-modal" class="modal">
-    <div class="modal-box">
-      <h3 class="font-bold text-lg">Duração do evento</h3>
-      <p class="py-4">Deseja salvar esse evento sem tempo de duração?</p>
-      <div class="modal-action">
-        <form method="dialog" id="duracao-modal-form">
-          <button id="btn-duracao-nao" class="btn btn-ghost">Não</button>
-          <button id="btn-duracao-sim" class="btn btn-primary">Sim</button>
-        </form>
-      </div>
-    </div>
-    <form method="dialog" class="modal-backdrop">
-      <button>Fechar</button>
-    </form>
-  </dialog>
-
+# JavaScript do modal de duração - definido como string separada para evitar problemas com f-string
+DURACAO_MODAL_JS = """
   <script>
     // Variável para guardar o formulário que disparou o modal
     let formularioPendente = null;
@@ -515,6 +454,79 @@ def render_page(sel):
       }
     });
   </script>
+"""
+
+
+def render_page(sel):
+    calendar_html = render_calendar(sel.year, sel.month, sel)
+    controls_html = render_controls()
+    day_panel_html = render_day_panel(sel)
+    alerts_html = render_alerts_banner()
+    sync_html = render_sync_status()
+    
+    return f'''<!DOCTYPE html>
+<html lang="pt-br" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agenda Simples</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" rel="stylesheet">
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script>
+    (function () {{
+      var t = localStorage.getItem("tema");
+      if (t) document.documentElement.setAttribute("data-theme", t);
+    }})();
+    function trocarTema(v) {{
+      document.documentElement.setAttribute("data-theme", v);
+      localStorage.setItem("tema", v);
+    }}
+    document.addEventListener("DOMContentLoaded", function () {{
+      var sel = document.getElementById("tema");
+      var t = localStorage.getItem("tema");
+      if (sel && t) sel.value = t;
+    }});
+  </script>
+</head>
+<body class="bg-base-200 min-h-screen">
+  <div class="max-w-5xl mx-auto p-4 space-y-4">
+    <header class="flex items-center justify-between gap-4">
+      <h1 class="text-2xl font-bold">📅 Agenda Simples</h1>
+    </header>
+    <div id="alerts-container">
+        {alerts_html}
+    </div>
+    <div id="sync-container">
+        {sync_html}
+    </div>
+    <div class="grid md:grid-cols-2 gap-4 items-start">
+      <div class="space-y-4">
+        {calendar_html}
+        {controls_html}
+      </div>
+      {day_panel_html}
+    </div>
+  </div>
+
+  <!-- Modal de confirmação para duração vazia -->
+  <dialog id="duracao-modal" class="modal">
+    <div class="modal-box">
+      <h3 class="font-bold text-lg">Duração do evento</h3>
+      <p class="py-4">Deseja salvar esse evento sem tempo de duração?</p>
+      <div class="modal-action">
+        <form method="dialog" id="duracao-modal-form">
+          <button id="btn-duracao-nao" class="btn btn-ghost">Não</button>
+          <button id="btn-duracao-sim" class="btn btn-primary">Sim</button>
+        </form>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+      <button>Fechar</button>
+    </form>
+  </dialog>
+
+  {DURACAO_MODAL_JS}
 </body>
 </html>'''
 
