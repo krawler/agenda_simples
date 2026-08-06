@@ -399,6 +399,11 @@ DURACAO_MODAL_JS = """
       const form = e.target.closest('form[data-duration-confirm]');
       if (!form) return;
 
+      // Se o formulário já foi confirmado (tem atributo data-duration-confirmed), permite submeter
+      if (form.hasAttribute('data-duration-confirmed')) {
+        return; // Permite submissão normal
+      }
+
       const durField = form.querySelector('input[name="dur"]');
       if (!durField) return;
 
@@ -406,6 +411,7 @@ DURACAO_MODAL_JS = """
       if (durValue === '') {
         // Duração vazia - mostra modal
         e.preventDefault();
+        e.stopPropagation();
         formularioPendente = form;
         campoDuracaoPendente = durField;
         modal.showModal();
@@ -413,9 +419,11 @@ DURACAO_MODAL_JS = """
       // Se tem valor, deixa submeter normalmente
     });
 
-    // Botão "Sim" - submete o formulário sem duração
+    // Botão "Sim" - marca formulário como confirmado e submete
     btnSim.addEventListener('click', function() {
       if (formularioPendente) {
+        // Marca o formulário como confirmado para não mostrar modal novamente
+        formularioPendente.setAttribute('data-duration-confirmed', 'true');
         modal.close();
         // Submete o formulário via HTMX
         htmx.trigger(formularioPendente, 'submit');
@@ -428,7 +436,11 @@ DURACAO_MODAL_JS = """
     btnNao.addEventListener('click', function() {
       if (campoDuracaoPendente) {
         modal.close();
-        campoDuracaoPendente.focus();
+        // Foca no campo de duração após o modal fechar
+        setTimeout(() => {
+          campoDuracaoPendente.focus();
+          campoDuracaoPendente.select(); // Seleciona o texto para facilitar edição
+        }, 0);
         formularioPendente = null;
         campoDuracaoPendente = null;
       }
@@ -438,7 +450,10 @@ DURACAO_MODAL_JS = """
     modal.addEventListener('close', function() {
       if (campoDuracaoPendente && modal.returnValue !== 'default') {
         // Se fechou sem clicar em "Sim", foca no campo
-        setTimeout(() => campoDuracaoPendente.focus(), 0);
+        setTimeout(() => {
+          campoDuracaoPendente.focus();
+          campoDuracaoPendente.select();
+        }, 0);
       }
       formularioPendente = null;
       campoDuracaoPendente = null;
@@ -449,7 +464,10 @@ DURACAO_MODAL_JS = """
       if (e.key === 'Escape') {
         e.preventDefault();
         if (campoDuracaoPendente) {
-          campoDuracaoPendente.focus();
+          setTimeout(() => {
+            campoDuracaoPendente.focus();
+            campoDuracaoPendente.select();
+          }, 0);
         }
       }
     });
@@ -516,8 +534,8 @@ def render_page(sel):
       <p class="py-4">Deseja salvar esse evento sem tempo de duração?</p>
       <div class="modal-action">
         <form method="dialog" id="duracao-modal-form">
-          <button id="btn-duracao-nao" class="btn btn-ghost">Não</button>
-          <button id="btn-duracao-sim" class="btn btn-primary">Sim</button>
+          <button id="btn-duracao-nao" type="button" class="btn btn-ghost">Não</button>
+          <button id="btn-duracao-sim" type="button" class="btn btn-primary">Sim</button>
         </form>
       </div>
     </div>
