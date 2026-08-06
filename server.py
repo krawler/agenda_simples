@@ -177,7 +177,7 @@ def render_edit_form(e, occ, panel_date):
         f'{"sem repetição" if r == "none" else r}</option>'
         for r in agenda.REPEATS)
     return f'''<li class="p-3 rounded-lg bg-base-200 ring ring-primary ring-1">
-  <form hx-post="/update" hx-target="#day-panel" class="space-y-2">
+  <form hx-post="/update" hx-target="#day-panel" class="space-y-2" data-duration-confirm>
     <input type="hidden" name="id" value="{e["id"]}">
     <input type="hidden" name="panel_date" value="{iso}">
     <input name="titulo" required value="{esc(e["titulo"])}"
@@ -190,7 +190,7 @@ def render_edit_form(e, occ, panel_date):
     </div>
     <div class="flex gap-2">
       <input type="number" name="dur" min="1" value="{e.get('dur') or ''}"
-        placeholder="min" class="input input-bordered input-sm w-24">
+        placeholder="min" class="input input-bordered input-sm w-24 duration-field" id="dur-edit-{e['id']}">
       <select name="repeat" class="select select-bordered select-sm flex-1">{opts}</select>
     </div>
     <input name="desc" value="{esc(e.get('desc') or '')}" placeholder="Descrição"
@@ -198,7 +198,7 @@ def render_edit_form(e, occ, panel_date):
     <input type="date" name="until" value="{esc(e.get('until') or '')}"
       title="repetir até" class="input input-bordered input-sm w-full">
     <div class="flex gap-2">
-      <button class="btn btn-primary btn-sm flex-1">Salvar</button>
+      <button type="submit" class="btn btn-primary btn-sm flex-1">Salvar</button>
       <button type="button" class="btn btn-ghost btn-sm"
         hx-get="/day?date={iso}" hx-target="#day-panel">Cancelar</button>
     </div>
@@ -225,7 +225,7 @@ def render_day_panel(d, editando=None):
     novo_evento = ""
     if editando is None:
         novo_evento = f'''<div class="divider my-2">Novo evento</div>
-    <form hx-post="/event" hx-target="#day-panel" class="space-y-2">
+    <form hx-post="/event" hx-target="#day-panel" class="space-y-2" data-duration-confirm>
       <input type="hidden" name="panel_date" value="{iso}">
       <input name="titulo" required placeholder="Título"
         class="input input-bordered input-sm w-full">
@@ -235,7 +235,7 @@ def render_day_panel(d, editando=None):
         <input type="time" name="time" value="09:00" required
           class="input input-bordered input-sm w-28">
         <input type="number" name="dur" min="1" placeholder="min"
-          class="input input-bordered input-sm w-24" title="duração em minutos">
+          class="input input-bordered input-sm w-24 duration-field" id="dur-new" title="duração em minutos">
       </div>
       <div class="flex gap-2">
         <select name="repeat" class="select select-bordered select-sm flex-1">
@@ -246,7 +246,7 @@ def render_day_panel(d, editando=None):
       </div>
       <input name="desc" placeholder="Descrição (opcional)"
         class="input input-bordered input-sm w-full">
-      <button class="btn btn-primary btn-sm w-full">Adicionar</button>
+      <button type="submit" class="btn btn-primary btn-sm w-full">Adicionar</button>
     </form>'''
 
     return f'''<div id="day-panel" class="card bg-base-100 shadow-md">
@@ -427,6 +427,94 @@ def render_page(sel):
       {render_day_panel(sel)}
     </div>
   </div>
+
+  <!-- Modal de confirmação para duração vazia -->
+  <dialog id="duracao-modal" class="modal">
+    <div class="modal-box">
+      <h3 class="font-bold text-lg">Duração do evento</h3>
+      <p class="py-4">Deseja salvar esse evento sem tempo de duração?</p>
+      <div class="modal-action">
+        <form method="dialog" id="duracao-modal-form">
+          <button id="btn-duracao-nao" class="btn btn-ghost">Não</button>
+          <button id="btn-duracao-sim" class="btn btn-primary">Sim</button>
+        </form>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+      <button>Fechar</button>
+    </form>
+  </dialog>
+
+  <script>
+    // Variável para guardar o formulário que disparou o modal
+    let formularioPendente = null;
+    let campoDuracaoPendente = null;
+
+    // Inicializa o modal
+    const modal = document.getElementById('duracao-modal');
+    const btnSim = document.getElementById('btn-duracao-sim');
+    const btnNao = document.getElementById('btn-duracao-nao');
+
+    // Intercepta submissão de formulários com data-duration-confirm
+    document.body.addEventListener('submit', function(e) {
+      const form = e.target.closest('form[data-duration-confirm]');
+      if (!form) return;
+
+      const durField = form.querySelector('input[name="dur"]');
+      if (!durField) return;
+
+      const durValue = durField.value.trim();
+      if (durValue === '') {
+        // Duração vazia - mostra modal
+        e.preventDefault();
+        formularioPendente = form;
+        campoDuracaoPendente = durField;
+        modal.showModal();
+      }
+      // Se tem valor, deixa submeter normalmente
+    });
+
+    // Botão "Sim" - submete o formulário sem duração
+    btnSim.addEventListener('click', function() {
+      if (formularioPendente) {
+        modal.close();
+        // Submete o formulário via HTMX
+        htmx.trigger(formularioPendente, 'submit');
+        formularioPendente = null;
+        campoDuracaoPendente = null;
+      }
+    });
+
+    // Botão "Não" - cancela e foca no campo de duração
+    btnNao.addEventListener('click', function() {
+      if (campoDuracaoPendente) {
+        modal.close();
+        campoDuracaoPendente.focus();
+        formularioPendente = null;
+        campoDuracaoPendente = null;
+      }
+    });
+
+    // Fechar modal clicando no backdrop também cancela
+    modal.addEventListener('close', function() {
+      if (campoDuracaoPendente && modal.returnValue !== 'default') {
+        // Se fechou sem clicar em "Sim", foca no campo
+        setTimeout(() => campoDuracaoPendente.focus(), 0);
+      }
+      formularioPendente = null;
+      campoDuracaoPendente = null;
+    });
+
+    // Permite fechar com ESC
+    modal.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        if (campoDuracaoPendente) {
+          campoDuracaoPendente.focus();
+        }
+      }
+    });
+  </script>
 </body>
 </html>'''
 
