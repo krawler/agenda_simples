@@ -413,6 +413,8 @@ def get_google_events(service, time_min=None, time_max=None):
 def find_local_event_by_google_id(eventos, google_id):
     """Encontra evento local pelo google_id."""
     for e in eventos:
+        print("evento: " + e.get("titulo") + " inicio: " + str(e.get("inicio")) + " google_id: " + str(e.get("google_id")))
+        print("google_id buscado: " + str(google_id))
         if e.get("google_id") == google_id:
             return e
     return None
