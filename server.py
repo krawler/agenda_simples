@@ -28,6 +28,7 @@ TEMAS = ["light", "dark", "cupcake", "corporate", "emerald", "synthwave",
          "dracula", "night", "coffee", "winter"]
 MESES = ["", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
          "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
+ANOS_DISPONIVEIS = [2025, 2026, 2027, 2028]
 
 
 # --------------------------------------------------------------- consultas dados
@@ -86,7 +87,7 @@ def render_calendar(ano, mes, sel):
                 f'hx-get="/day?date={iso}" hx-target="#day-panel">'
                 f'<span>{dia}</span>{ponto}</button>')
 
-    return f'''<div id="calendar" class="card bg-base-100 shadow-md">
+    return f'''<div id="calendar" class="card bg-base-100 shadow-md" data-ano="{ano}" data-mes="{mes}" data-sel="{sel.isoformat()}">
   <div class="card-body p-4">
     <div class="flex items-center justify-between mb-2">
       <button class="btn btn-sm btn-ghost"
@@ -103,8 +104,16 @@ def render_calendar(ano, mes, sel):
 </div>'''
 
 
-def render_controls():
-    """Renderiza os controles (tema, botões) para ficar abaixo do calendário."""
+def render_controls(ano_atual=None):
+    """Renderiza os controles (tema, botões, seletor de ano) para ficar abaixo do calendário."""
+    if ano_atual is None:
+        ano_atual = date.today().year
+    
+    opts_ano = "".join(
+        f'<option value="{a}"{" selected" if a == ano_atual else ""}>{a}</option>'
+        for a in ANOS_DISPONIVEIS
+    )
+    
     return f'''<div class="card bg-base-100 shadow-md p-4">
   <div class="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full">
     <select id="tema" onchange="trocarTema(this.value)"
@@ -112,6 +121,10 @@ def render_controls():
       {"".join(f'<option value="{t}">{t}</option>' for t in TEMAS)}
     </select>
     <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-start sm:justify-end">
+      <select id="ano-calendario" onchange="trocarAnoCalendario(this.value)"
+        class="select select-bordered select-sm w-auto" title="Ano do calendário">
+        {opts_ano}
+      </select>
       <button class="btn btn-sm btn-primary" hx-get="/alerts" hx-target="#alerts"
         hx-swap="outerHTML">Próx. evento</button>
       <button class="btn btn-sm btn-primary" hx-post="/sync" hx-target="#sync-status"
@@ -471,13 +484,32 @@ DURACAO_MODAL_JS = """
         }
       }
     });
+
+    // Função para trocar o ano do calendário
+    function trocarAnoCalendario(ano) {
+      const calendarEl = document.getElementById('calendar');
+      if (!calendarEl) return;
+      
+      const mesAtual = parseInt(calendarEl.dataset.mes) || new Date().getMonth() + 1;
+      const selAtual = calendarEl.dataset.sel || new Date().toISOString().split('T')[0];
+      
+      // Faz requisição HTMX para atualizar o calendário com o novo ano
+      htmx.ajax('GET', `/calendar?year=${ano}&month=${mesAtual}&sel=${selAtual}`, {
+        target: '#calendar',
+        swap: 'outerHTML'
+      });
+      
+      // Atualiza o valor do select
+      const selectAno = document.getElementById('ano-calendario');
+      if (selectAno) selectAno.value = ano;
+    }
   </script>
 """
 
 
 def render_page(sel):
     calendar_html = render_calendar(sel.year, sel.month, sel)
-    controls_html = render_controls()
+    controls_html = render_controls(sel.year)
     day_panel_html = render_day_panel(sel)
     alerts_html = render_alerts_banner()
     sync_html = render_sync_status()
