@@ -112,10 +112,10 @@ def render_controls():
       {"".join(f'<option value="{t}">{t}</option>' for t in TEMAS)}
     </select>
     <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-start sm:justify-end">
-      <button class="btn btn-sm btn-ghost" hx-get="/alerts" hx-target="#alerts"
-        hx-swap="outerHTML">Próximo evento</button>
+      <button class="btn btn-sm btn-primary" hx-get="/alerts" hx-target="#alerts"
+        hx-swap="outerHTML">Próx. evento</button>
       <button class="btn btn-sm btn-primary" hx-post="/sync" hx-target="#sync-status"
-        hx-swap="outerHTML" hx-indicator="#sync-indicator">☁ Sincronizar Google</button>
+        hx-swap="outerHTML" hx-indicator="#sync-indicator">☁ Sincronizar </button>
       <span id="sync-indicator" class="loading loading-spinner loading-sm htmx-indicator"></span>
     </div>
   </div>
@@ -363,7 +363,7 @@ def render_sync_status(status_msg="", is_loading=False, auto_hide=False, google_
         if (el) el.remove();
       }, 3000);
     </script>'''
-        html_output.append(f'''<div id="sync-status" class="alert {alert_class} shadow-sm">
+        html_output.append(f'''<div id="sync-status" class="alert {alert_class} shadow-sm my-4">
   <div class="flex items-center gap-2">
     <span>{esc(status_msg)}</span>
   </div>
@@ -510,7 +510,7 @@ def render_page(sel):
 <body class="bg-base-200 min-h-screen">
   <div class="max-w-5xl mx-auto p-4 space-y-4">
     <header class="flex items-center justify-between gap-4">
-      <h1 class="text-2xl font-bold">📅 Agenda Simples</h1>
+      <h1 class="text-2xl font-bold">📅 Agenda Brasileira Definitiva</h1>
     </header>
     <div id="alerts-container">
         {alerts_html}
