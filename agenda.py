@@ -54,9 +54,11 @@ try:
     from google_auth_oauthlib.flow import InstalledAppFlow
     from googleapiclient.discovery import build
     from googleapiclient.errors import HttpError
+    from google.auth.exceptions import RefreshError
     GOOGLE_AVAILABLE = True
 except ImportError:
     GOOGLE_AVAILABLE = False
+    RefreshError = Exception  # Fallback para type hints
 
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 
@@ -213,7 +215,13 @@ def get_google_service():
     
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
+            try:
+                creds.refresh(Request())
+            except RefreshError as e:
+                # Token expirado ou revogado - remove o token para forçar nova autenticação
+                if GOOGLE_TOKEN_FILE.exists():
+                    GOOGLE_TOKEN_FILE.unlink()
+                raise RefreshError("Token de autenticação Google expirado ou revogado. Execute a sincronização novamente para reautenticar.") from e
         else:
             if not GOOGLE_CREDENTIALS_FILE.exists():
                 sys.exit(f"Arquivo de credenciais não encontrado: {GOOGLE_CREDENTIALS_FILE}. Baixe do Google Cloud Console.")
@@ -351,6 +359,9 @@ def sync_event_to_google(e, occ=None):
         e["google_id"] = created['id']
         return True, "created"
         
+    except RefreshError:
+        # Re-lança para ser capturado no nível superior
+        raise
     except Exception as ex:
         print(f"Erro ao sincronizar evento {e['id']} com Google Calendar: {ex}")
         return False, "error"
@@ -373,6 +384,8 @@ def delete_event_from_google(e):
             return True  # Já não existe
         print(f"Erro ao remover evento {e['id']} do Google Calendar: {error}")
         return False
+    except RefreshError:
+        raise
     except Exception as ex:
         print(f"Erro ao remover evento {e['id']} do Google Calendar: {ex}")
         return False
@@ -390,6 +403,8 @@ def get_google_events(service, time_min=None, time_max=None):
             maxResults=2500
         ).execute()
         return events_result.get('items', [])
+    except RefreshError:
+        raise
     except Exception as ex:
         print(f"Erro ao buscar eventos do Google Calendar: {ex}")
         return []
@@ -556,18 +571,24 @@ def sync_all_and_get_results():
     
     print("Sincronizando com Google Calendar...")
     
-    # 1. Exporta eventos locais para o Google
-    print("Enviando eventos locais para Google Calendar...")
-    exportados, export_errors = sync_all_to_google()
-    
-    # 2. Importa eventos do Google que não estão no local
-    print("Buscando eventos do Google Calendar não presentes localmente...")
-    importados, import_errors = sync_from_google()
-    
-    total_errors = export_errors + import_errors
-    msg = "Sincronização concluída com sucesso!" if total_errors == 0 else f"Sincronização concluída com {total_errors} erro(s)."
-    
-    return msg, exportados, importados
+    try:
+        # 1. Exporta eventos locais para o Google
+        print("Enviando eventos locais para Google Calendar...")
+        exportados, export_errors = sync_all_to_google()
+        
+        # 2. Importa eventos do Google que não estão no local
+        print("Buscando eventos do Google Calendar não presentes localmente...")
+        importados, import_errors = sync_from_google()
+        
+        total_errors = export_errors + import_errors
+        msg = "Sincronização concluída com sucesso!" if total_errors == 0 else f"Sincronização concluída com {total_errors} erro(s)."
+        
+        return msg, exportados, importados
+    except RefreshError as e:
+        # Token expirado ou revogado
+        error_msg = "Não foi possível sincronizar, token de autenticação Google expirado"
+        print(f"Erro de autenticação: {e}")
+        return error_msg, [], []
 
 
 # ------------------------------------------------------------------------ main
