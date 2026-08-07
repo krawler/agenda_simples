@@ -413,8 +413,6 @@ def get_google_events(service, time_min=None, time_max=None):
 def find_local_event_by_google_id(eventos, google_id):
     """Encontra evento local pelo google_id."""
     for e in eventos:
-        print("evento: " + e.get("titulo") + " inicio: " + str(e.get("inicio")) + " google_id: " + str(e.get("google_id")))
-        print("google_id buscado: " + str(google_id))
         if e.get("google_id") == google_id:
             return e
     return None
@@ -502,17 +500,17 @@ def sync_from_google():
     
     importados = []
     errors = 0
-    imported_google_ids = set()  # Track google_ids imported in this sync
+    
+    # Popula o set com todos os google_ids já existentes no banco local
+    # Isso evita processar duplicatas do Google (ex: instâncias de eventos recorrentes com mesmo ID)
+    imported_google_ids = {e.get("google_id") for e in eventos if e.get("google_id")}
     
     for ge in google_events:
-        # Verifica se já existe localmente pelo google_id
-        if find_local_event_by_google_id(eventos, ge['id']):
-            continue  # Já existe localmente
+        gid = ge['id']
         
-        # Evita importar o mesmo google_id múltiplas vezes nesta sincronização
-        # (pode acontecer com instâncias de eventos recorrentes que têm o mesmo ID)
-        if ge['id'] in imported_google_ids:
-            continue
+        # Verifica se já existe localmente pelo google_id
+        if gid in imported_google_ids:
+            continue  # Já existe localmente (ou já foi processado neste loop)
         
         # Converte evento do Google para formato local
         start = ge['start'].get('dateTime', ge['start'].get('date'))
@@ -562,15 +560,15 @@ def sync_from_google():
                 "desc": ge.get('description'),
                 "repeat": repeat,
                 "until": until,
-                "google_id": ge['id']
+                "google_id": gid
             }
             eventos.append(evento)
-            imported_google_ids.add(ge['id'])
+            imported_google_ids.add(gid)  # Adiciona ao set para evitar duplicatas no mesmo loop
             importados.append({
                 "id": evento["id"],
                 "titulo": evento["titulo"],
                 "inicio": evento["inicio"],
-                "google_id": ge['id']
+                "google_id": gid
             })
         except Exception as ex:
             print(f"Erro ao converter evento do Google: {ex}")
