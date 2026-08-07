@@ -418,6 +418,21 @@ def find_local_event_by_google_id(eventos, google_id):
     return None
 
 
+def _deduplicate_by_google_id(event_list):
+    """Remove duplicatas de uma lista de eventos baseando-se no google_id."""
+    seen = set()
+    unique = []
+    for ev in event_list:
+        gid = ev.get("google_id")
+        if gid and gid not in seen:
+            seen.add(gid)
+            unique.append(ev)
+        elif not gid:
+            # Eventos sem google_id (erro) mantemos todos
+            unique.append(ev)
+    return unique
+
+
 def sync_all_to_google():
     """Sincroniza todos os eventos locais para o Google Calendar.
     Retorna: (eventos_exportados, erros)
@@ -436,20 +451,25 @@ def sync_all_to_google():
     
     exportados = []
     errors = 0
+    created_google_ids = set()  # Track google_ids created in this sync
     
     for e in eventos:
         # Tenta sincronizar: se tem google_id e ele existe no Google, atualiza; senão cria novo
         success, action = sync_event_to_google(e)
         if success:
             # Só adiciona à lista de exportados se foi CRIADO (não se foi apenas atualizado)
+            # E evita duplicatas por google_id criados nesta sincronização
             if action == "created":
-                exportados.append({
-                    "id": e["id"],
-                    "titulo": e["titulo"],
-                    "inicio": e["inicio"],
-                    "google_id": e["google_id"],
-                    "action": action
-                })
+                gid = e.get("google_id")
+                if gid and gid not in created_google_ids:
+                    created_google_ids.add(gid)
+                    exportados.append({
+                        "id": e["id"],
+                        "titulo": e["titulo"],
+                        "inicio": e["inicio"],
+                        "google_id": gid,
+                        "action": action
+                    })
         else:
             errors += 1
     
@@ -480,11 +500,17 @@ def sync_from_google():
     
     importados = []
     errors = 0
+    imported_google_ids = set()  # Track google_ids imported in this sync
     
     for ge in google_events:
         # Verifica se já existe localmente pelo google_id
         if find_local_event_by_google_id(eventos, ge['id']):
             continue  # Já existe localmente
+        
+        # Evita importar o mesmo google_id múltiplas vezes nesta sincronização
+        # (pode acontecer com instâncias de eventos recorrentes que têm o mesmo ID)
+        if ge['id'] in imported_google_ids:
+            continue
         
         # Converte evento do Google para formato local
         start = ge['start'].get('dateTime', ge['start'].get('date'))
@@ -537,6 +563,7 @@ def sync_from_google():
                 "google_id": ge['id']
             }
             eventos.append(evento)
+            imported_google_ids.add(ge['id'])
             importados.append({
                 "id": evento["id"],
                 "titulo": evento["titulo"],
@@ -579,6 +606,10 @@ def sync_all_and_get_results():
         # 2. Importa eventos do Google que não estão no local
         print("Buscando eventos do Google Calendar não presentes localmente...")
         importados, import_errors = sync_from_google()
+        
+        # Deduplica resultados finais por google_id (segurança extra)
+        exportados = _deduplicate_by_google_id(exportados)
+        importados = _deduplicate_by_google_id(importados)
         
         total_errors = export_errors + import_errors
         msg = "Sincronização concluída com sucesso!" if total_errors == 0 else f"Sincronização concluída com {total_errors} erro(s)."
