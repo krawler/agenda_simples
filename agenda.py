@@ -290,6 +290,32 @@ def sync_event_to_google(e, occ=None):
         # Se o evento já tem google_id, tenta atualizar
         if e.get("google_id"):
             try:
+                # Primeiro, busca o evento existente para verificar o tipo
+                existing = service.events().get(
+                    calendarId=GOOGLE_CALENDAR_ID,
+                    eventId=e["google_id"]
+                ).execute()
+                
+                # Detecta tipos: se existe 'dateTime', é evento com hora; senão é all-day (date)
+                novo_tem_hora = 'dateTime' in google_event['start']
+                existente_tem_hora = 'dateTime' in existing['start']
+                
+                # Se o tipo mudou (date ↔ dateTime), deleta e recria
+                if novo_tem_hora != existente_tem_hora:
+                    print(f"  Tipo de evento mudou (all-day ↔ com hora), recriando...")
+                    service.events().delete(
+                        calendarId=GOOGLE_CALENDAR_ID,
+                        eventId=e["google_id"]
+                    ).execute()
+                    # Recria como novo
+                    created = service.events().insert(
+                        calendarId=GOOGLE_CALENDAR_ID,
+                        body=google_event
+                    ).execute()
+                    e["google_id"] = created['id']
+                    return True, "recreated"
+                
+                # Senão, atualiza normalmente
                 updated = service.events().update(
                     calendarId=GOOGLE_CALENDAR_ID,
                     eventId=e["google_id"],
@@ -297,10 +323,23 @@ def sync_event_to_google(e, occ=None):
                 ).execute()
                 e["google_id"] = updated['id']
                 return True, "updated"
+                
             except HttpError as error:
                 if error.resp.status == 404:
-                    # Evento não existe mais no Google, cria novo
+                    # Evento não existe mais, cria novo
                     pass
+                elif error.resp.status == 400 and 'eventTypeRestriction' in str(error):
+                    # Erro de tipo de evento (não pode mudar date ↔ dateTime) - deleta e recria
+                    print(f"  Não é possível mudar tipo do evento, recriando...")
+                    try:
+                        service.events().delete(
+                            calendarId=GOOGLE_CALENDAR_ID,
+                            eventId=e["google_id"]
+                        ).execute()
+                    except:
+                        pass
+                    # Remove google_id para criar como novo
+                    e["google_id"] = None
                 else:
                     raise
         
@@ -311,6 +350,7 @@ def sync_event_to_google(e, occ=None):
         ).execute()
         e["google_id"] = created['id']
         return True, "created"
+        
     except Exception as ex:
         print(f"Erro ao sincronizar evento {e['id']} com Google Calendar: {ex}")
         return False, "error"
