@@ -116,11 +116,11 @@ def render_controls(ano_atual=None):
     
     return f'''<div class="card bg-base-100 shadow-md p-4">
   <div class="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full">
-    <select id="tema" onchange="trocarTema(this.value)"
-      class="select select-bordered select-sm w-full sm:w-auto" title="Tema">
-      {"".join(f'<option value="{t}">{t}</option>' for t in TEMAS)}
-    </select>
-    <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-start sm:justify-end">
+    <div class="flex items-center gap-2 w-full sm:w-auto justify-start sm:justify-end">
+      <select id="tema" onchange="trocarTema(this.value)"
+        class="select select-bordered select-sm w-full sm:w-auto" title="Tema">
+        {"".join(f'<option value="{t}">{t}</option>' for t in TEMAS)}
+      </select>  
       <select id="ano-calendario" onchange="trocarAnoCalendario(this.value)"
         class="select select-bordered select-sm w-auto" title="Ano do calendário">
         {opts_ano}
@@ -128,7 +128,7 @@ def render_controls(ano_atual=None):
       <button class="btn btn-sm btn-primary" hx-get="/alerts" hx-target="#alerts"
         hx-swap="outerHTML">Próx. evento</button>
       <button class="btn btn-sm btn-primary" hx-post="/sync" hx-target="#sync-status"
-        hx-swap="outerHTML" hx-indicator="#sync-indicator">☁ Sincronizar </button>
+        hx-swap="outerHTML" hx-indicator="#sync-indicator">☁ Sinc. Google </button>
       <span id="sync-indicator" class="loading loading-spinner loading-sm htmx-indicator"></span>
     </div>
   </div>
@@ -300,7 +300,7 @@ def render_google_events_list(google_events, mode="importados"):
     linhas = []
     
     # Define cores baseadas no modo
-    alert_class = "alert-info" if mode == "importados" else "alert-success"
+    alert_class = "alert-info" if mode == "importados" else "alert-success my-4"
     titulo_header = "Eventos Importados do Google" if mode == "importados" else "Eventos Exportados para o Google"
 
     for ge in google_events:
@@ -337,11 +337,11 @@ def render_google_events_list(google_events, mode="importados"):
 
         linhas.append(
             f'<div class="flex items-center gap-2 p-1">'
-            f'<span class="badge badge-secondary gap-1">{esc(titulo)}</span>'
+            f'<span class="badge badge-primary gap-1">{esc(titulo)}</span>'
             f'<span class="text-xs opacity-70">({faltam_str} - {occ_fmt:%d/%m %H:%M})</span>'
             f'</div>'
         )
-
+    
     return f'''<div id="google-events-list-{mode}" class="alert {alert_class} shadow-sm">
   <div class="flex items-center justify-between mb-2">
     <span class="font-semibold">{titulo_header} ({len(google_events)}):</span>
@@ -349,7 +349,7 @@ def render_google_events_list(google_events, mode="importados"):
   <div class="space-y-1 max-h-40 overflow-y-auto">
     {"".join(linhas)}
   </div>
-  <button type="button" class="btn btn-xs btn-ghost btn-circle" onclick="this.closest('#google-events-list-{mode}').remove()" title="Fechar">✕</button>
+  <button type="button" class="btn btn-xs btn-ghost btn-circle" onclick="document.getElementById('google-events-list-{mode}').style.display = 'none'" title="Fechar">✕</button>
 </div>'''
 
 
@@ -372,11 +372,10 @@ def render_sync_status(status_msg="", is_loading=False, auto_hide=False, google_
             auto_hide_script = '''
     <script>
       setTimeout(function() {
-        var el = document.getElementById('sync-status');
-        if (el) el.remove();
+        document.getElementById('sync-status').style.display = 'none';
       }, 3000);
     </script>'''
-        html_output.append(f'''<div id="sync-status" class="alert {alert_class} shadow-sm my-4">
+        html_output.append(f'''<div id="sync-status" class="alert {alert_class} shadow-sm">
   <div class="flex items-center gap-2">
     <span>{esc(status_msg)}</span>
   </div>
@@ -541,7 +540,7 @@ def render_page(sel):
 </head>
 <body class="bg-base-200 min-h-screen">
   <div class="max-w-5xl mx-auto p-4 space-y-4">
-    <header class="flex items-center justify-between gap-4">
+    <header class="flex items-center justify-center gap-4">
       <h1 class="text-2xl font-bold">📅 Agenda Brasileira Definitiva</h1>
     </header>
     <div id="alerts-container">
@@ -751,9 +750,17 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     p = argparse.ArgumentParser(description="Servidor web da agenda simples.")
     p.add_argument("--port", type=int, default=8000)
-    p.add_argument("--host", default="0.0.0.0")
+    p.add_argument("--host", default="127.0.0.1",
+                   help="Endereço de escuta. Use 0.0.0.0 para aceitar conexões externas.")
     args = p.parse_args()
-    srv = ThreadingHTTPServer((args.host, args.port), Handler)
+    try:
+        srv = ThreadingHTTPServer((args.host, args.port), Handler)
+    except PermissionError as ex:
+        print(f"Erro ao abrir o servidor em {args.host}:{args.port}: {ex}")
+        print("Tente usar uma porta diferente ou execute com privilégios elevados.")
+        print("Para uso local, rode: python server.py --host 127.0.0.1")
+        return
+
     print(f"Agenda web em http://{args.host}:{args.port}  (Ctrl+C para sair)")
     try:
         srv.serve_forever()
