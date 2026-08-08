@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+
+# Segredos e estado de runtime
+.env
+enviados.json
+
+# Dados locais da agenda
+eventos.json
+.aider*
+.vscode/launch.json
+token.json
+credentials.json
