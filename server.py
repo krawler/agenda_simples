@@ -128,8 +128,8 @@ def render_controls(ano_atual=None):
       <button class="btn btn-sm btn-primary" hx-get="/alerts" hx-target="#alerts"
         hx-swap="outerHTML">Próx. evento</button>
       <button class="btn btn-sm btn-primary" hx-post="/sync" hx-target="#sync-status"
-        hx-swap="outerHTML" hx-indicator="#sync-indicator">☁ Sinc. Google </button>
-      <span id="sync-indicator" class="loading loading-spinner loading-sm htmx-indicator"></span>
+        hx-swap="outerHTML" hx-indicator="#sync-status">☁ Sinc. Google </button>
+      <span id="sync-indicator" class="loading loading-bars loading-xl htmx-indicator"></span>
     </div>
   </div>
 </div>'''
@@ -175,10 +175,9 @@ def render_evento_item(occ, e):
     {occ:%H:%M}{dur}
   </div>
   <div class="flex-1">
-    <div class="font-medium flex items-center gap-2">{esc(e["titulo"])} {badges}</div>
+    <div class="font-medium flex items-center gap-2">{esc(e["titulo"])} {badges}{acoes}</div>
     {desc}
   </div>
-  {acoes}
 </li>'''
 
 
@@ -356,12 +355,12 @@ def render_google_events_list(google_events, mode="importados"):
 def render_sync_status(status_msg="", is_loading=False, auto_hide=False, google_events_importados=None, google_events_exportados=None):
     """Renderiza o status da sincronização e os dois quadros de eventos."""
     if is_loading:
-        return f'''<div id="sync-status" class="alert alert-info shadow-sm">
-  <div class="flex items-center gap-2">
-    <span class="loading loading-spinner loading-sm"></span>
-    <span>Sincronizando com Google Calendar...</span>
-  </div>
-</div>'''
+        return f'''<div id="sync-status" class="alert alert-info shadow-sm htmx-indicator">
+                    <div class="flex items-center gap-2">
+                      <span class="loading loading-spinner loading-sm"></span>
+                      <span>Sincronizando com Google Calendar...</span>
+                    </div>
+                  </div>'''
     
     html_output = []
     
@@ -370,17 +369,17 @@ def render_sync_status(status_msg="", is_loading=False, auto_hide=False, google_
         auto_hide_script = ''
         if auto_hide and "sucesso" in status_msg.lower():
             auto_hide_script = '''
-    <script>
-      setTimeout(function() {
-        document.getElementById('sync-status').style.display = 'none';
-      }, 3000);
-    </script>'''
-        html_output.append(f'''<div id="sync-status" class="alert {alert_class} shadow-sm">
-  <div class="flex items-center gap-2">
-    <span>{esc(status_msg)}</span>
-  </div>
-</div>
-{auto_hide_script}''')
+            <script>
+              setTimeout(function() {
+                document.getElementById('sync-status').style.display = 'none';
+              }, 3000);
+            </script>'''
+            html_output.append(f'''<div id="sync-status" class="alert {alert_class} shadow-sm">
+          <div class="flex items-center gap-2">
+            <span>{esc(status_msg)}</span>
+          </div>
+        </div>
+        {auto_hide_script}''')
     else:
         html_output.append('<div id="sync-status"></div>')
 
@@ -547,6 +546,12 @@ def render_page(sel):
         {alerts_html}
     </div>
     <div id="sync-container">
+        <div id="sync-status" class="alert alert-info shadow-sm htmx-indicator">
+          <div class="flex items-center gap-2">
+            <span class="loading loading-bars loading-md"></span>
+            <span class="text-lg font-semibold">&nbsp;&nbsp;Sincronizando com Google Calendar...</span>
+          </div>
+        </div>
         {sync_html}
     </div>
     <div class="grid md:grid-cols-2 gap-4 items-start">
@@ -721,6 +726,7 @@ class Handler(BaseHTTPRequestHandler):
         self._responder_com_calendario(self._parse_date(q.get("date", [""])[0]))
 
     def _sincronizar_google(self):
+        
         if not agenda.GOOGLE_AVAILABLE:
             self._send(render_sync_status("Bibliotecas do Google Calendar não instaladas."))
             return
@@ -733,7 +739,7 @@ class Handler(BaseHTTPRequestHandler):
         msg, exportados, importados = agenda.sync_all_and_get_results()
         
         # Envia resposta com os dois painéis
-        self._send(render_sync_status(msg, auto_hide=True, 
+        self._send(render_sync_status(msg, is_loading=False, auto_hide=True, 
                                      google_events_importados=importados,
                                      google_events_exportados=exportados))
 
