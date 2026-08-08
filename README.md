@@ -115,6 +115,9 @@ python notificador.py --once                  # checa uma vez e sai (Agendador/c
 python notificador.py --interval 30           # intervalo customizado
 ```
 
+- Instalar dependências Google na sua venv:
+pip install --upgrade google-api-python-client google-auth-httplib2 google-auth-oauthlib
+
 - **Modo serviço** (`python notificador.py`): deixe rodando; verifica a cada 60s.
 - **Modo `--once`**: ideal para agendar no **Agendador de Tarefas do Windows**
   (ou cron) a cada 5–15 min — sem processo fixo em segundo plano.
