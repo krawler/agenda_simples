@@ -454,6 +454,28 @@ def sync_all_to_google():
     created_google_ids = set()  # Track google_ids created in this sync
     
     for e in eventos:
+
+         # Filtra eventos do passado - mantemos apenas eventos futuros
+        ini = e.get("inicio", "")
+        s = ini.replace('Z', '+00:00')
+        # Normaliza separador entre data e hora: aceita 'T' ou espaço
+        if 'T' not in s and ' ' in s:
+            s = s.replace(' ', 'T', 1)
+        # Se for somente data, adiciona horário 00:00:00
+        if 'T' not in s:
+            s = s + 'T00:00:00'
+        try:
+            inicio_dt = datetime.fromisoformat(s)
+        except ValueError:
+            # Tentativa de fallback para formatos inesperados
+            try:
+                inicio_dt = datetime.fromisoformat(ini)
+            except ValueError:
+                inicio_dt = datetime.fromisoformat(ini.split(' ')[0] + 'T00:00:00')
+
+        if inicio_dt < datetime.now():
+            continue
+        
         # Tenta sincronizar: se tem google_id e ele existe no Google, atualiza; senão cria novo
         success, action = sync_event_to_google(e)
         if success:
@@ -493,7 +515,7 @@ def sync_from_google():
     service = get_google_service()
     
     # Busca eventos do Google dos últimos 2 anos até 2 anos no futuro
-    time_min = datetime.now() - timedelta(days=730)
+    time_min = datetime.now()
     time_max = datetime.now() + timedelta(days=730)
     
     google_events = get_google_events(service, time_min, time_max)
