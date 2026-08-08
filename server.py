@@ -45,11 +45,6 @@ def dias_com_eventos(ano, mes):
     return {occ.date() for occ, _ in agenda.expandir(agenda.carregar(), wstart, wend)}
 
 
-def alertas_30min():
-    agora = datetime.now()
-    return agenda.expandir(agenda.carregar(), agora, agora + timedelta(minutes=30))
-
-
 # ------------------------------------------------------------------- renderizacao
 def esc(v):
     return html.escape(str(v)) if v is not None else ""
@@ -125,10 +120,10 @@ def render_controls(ano_atual=None):
         class="select select-bordered select-sm w-auto" title="Ano do calendário">
         {opts_ano}
       </select>
-      <button class="btn btn-sm btn-primary" hx-get="/alerts" hx-target="#alerts"
-        hx-swap="outerHTML">Próx. evento</button>
+      <button class="btn btn-sm btn-primary" hx-get="/alerts" hx-target="#alerts-container"
+        hx-swap="innerHTML">Próx. evento</button>
       <button class="btn btn-sm btn-primary" hx-post="/sync" hx-target="#sync-status"
-        hx-swap="outerHTML" hx-indicator="#sync-status">☁ Sinc. Google </button>
+        hx-swap="outerHTML" hx-indicator="#sync-indicator">☁ Sinc. Google </button>
       <span id="sync-indicator" class="loading loading-bars loading-xl htmx-indicator"></span>
     </div>
   </div>
@@ -270,18 +265,45 @@ def render_day_panel(d, editando=None):
 </div>'''
 
 
-def render_alerts_banner():
-    itens = alertas_30min()
+def render_proximos_eventos_dia(d):
+    """Renderiza lista dos próximos eventos do dia com fundo amarelo (warning)."""
+    itens = agenda.proximos_eventos_dia(d)
     if not itens:
-        return '<div id="alerts"></div>'
+        return ('<div id="proximos-eventos" class="alert alert-warning shadow-sm">'
+                '<div class="flex items-center gap-2">'
+                '<span class="opacity-50">Nenhum evento futuro para hoje.</span>'
+                '</div></div>')
+    
+    linhas = "".join(
+        f'<div class="flex items-center gap-2 p-1">'
+        f'<span class="badge badge-primary gap-1">{esc(e["titulo"])}</span>'
+        f'<span class="text-xs opacity-70">({occ:%H:%M})</span>'
+        f'</div>'
+        for occ, e in itens)
+    
+    return f'''<div id="proximos-eventos" class="alert alert-warning shadow-sm">
+  <div class="flex items-center justify-between mb-2">
+    <span class="font-semibold">Próximos eventos de hoje ({len(itens)}):</span>
+  </div>
+  <div class="space-y-1 max-h-60 overflow-y-auto">
+    {linhas}
+  </div>
+</div>'''
+
+
+def render_alerts_banner():
+    """Renderiza banner de alerta para eventos nos próximos 30 min com fundo VERMELHO (error)."""
+    itens = agenda.alertas_janela(30)
+    if not itens:
+        return '<div id="alerts-banner"></div>'
     agora = datetime.now()
     linhas = "".join(
-        f'<span class="badge badge-warning gap-1">⏰ {esc(e["titulo"])} '
+        f'<span class="badge badge-error gap-1">⏰ {esc(e["titulo"])} '
         f'({int((occ - agora).total_seconds() // 60)} min)</span> '
         for occ, e in itens)
-    return (f'<div id="alerts" class="alert alert-warning shadow-sm">'
+    return (f'<div id="alerts-banner" class="alert alert-error shadow-sm">'
             f'<div class="flex flex-wrap gap-2 items-center">'
-            f'<span class="font-semibold">Próximos 30 min:</span>{linhas}</div></div>')
+            f'<span class="font-semibold">⚠ Eventos iniciando em 30 min:</span>{linhas}</div></div>')
 
 
 def render_google_events_list(google_events, mode="importados"):
@@ -425,7 +447,7 @@ DURACAO_MODAL_JS = """
         e.stopPropagation();
         formularioPendente = form;
         campoDuracaoPendente = durField;
-        modal.showModal();
+        modal.showDialog();
       }
       // Se tem valor, deixa submeter normalmente
     });
@@ -510,6 +532,7 @@ def render_page(sel):
     controls_html = render_controls(sel.year)
     day_panel_html = render_day_panel(sel)
     alerts_html = render_alerts_banner()
+    proximos_html = render_proximos_eventos_dia(sel)
     sync_html = render_sync_status()
     
     return f'''<!DOCTYPE html>
@@ -544,6 +567,7 @@ def render_page(sel):
     </header>
     <div id="alerts-container">
         {alerts_html}
+        {proximos_html}
     </div>
     <div id="sync-container">
         <div id="sync-status" class="alert alert-info shadow-sm htmx-indicator">
@@ -628,7 +652,12 @@ class Handler(BaseHTTPRequestHandler):
                     sel = self._parse_date(q.get("sel", [""])[0])
                     self._send(render_calendar(ano, mes, sel))
             case "/alerts":
-                self._send(render_alerts_banner())
+                # Retorna tanto o banner de alerta (vermelho se eventos em 30min) 
+                # quanto a lista de próximos eventos do dia (amarelo)
+                d = date.today()
+                alerts_banner = render_alerts_banner()
+                proximos_eventos = render_proximos_eventos_dia(d)
+                self._send(alerts_banner + proximos_eventos)
             case _:
                 self._send("<h1>404</h1>", 404)
 

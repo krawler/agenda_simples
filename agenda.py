@@ -203,6 +203,31 @@ def formatar(e, ini):
     return linha
 
 
+def proximos_eventos_dia(d, agora=None):
+    """
+    Retorna eventos do dia `d` a partir de `agora` (ou agora real), ordenados por hora.
+    Se `d` não for hoje, retorna todos os eventos do dia.
+    """
+    if agora is None:
+        agora = datetime.now()
+    wstart = datetime.combine(d, time.min)
+    wend = datetime.combine(d, time.max)
+    todos = expandir(carregar(), wstart, wend)
+    if d == date.today():
+        return [(occ, e) for occ, e in todos if occ >= agora]
+    return todos
+
+
+def alertas_janela(minutos=30, agora=None):
+    """
+    Retorna eventos que iniciam nos próximos `minutos` minutos.
+    Usado para alertas de proximidade.
+    """
+    if agora is None:
+        agora = datetime.now()
+    return expandir(carregar(), agora, agora + timedelta(minutes=minutos))
+
+
 # -------------------------------------------------------------- Google Calendar
 def get_google_service():
     """Autentica e retorna o serviço do Google Calendar."""
