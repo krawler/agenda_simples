@@ -123,7 +123,7 @@ def render_controls(ano_atual=None):
       <button class="btn btn-sm btn-primary" hx-get="/alerts" hx-target="#alerts-container"
         hx-swap="innerHTML">Próx. evento</button>
       <button class="btn btn-sm btn-primary" hx-post="/sync" hx-target="#sync-status"
-        hx-swap="outerHTML" hx-indicator="#sync-indicator">☁ Sinc. Google </button>
+        hx-swap="outerHTML" hx-indicator="#sync-status">☁ Sinc. Google </button>
       <span id="sync-indicator" class="loading loading-bars loading-xl htmx-indicator"></span>
     </div>
   </div>
@@ -272,7 +272,9 @@ def render_proximos_eventos_dia(d):
         return ('<div id="proximos-eventos" class="alert alert-warning shadow-sm">'
                 '<div class="flex items-center gap-2">'
                 '<span class="opacity-50">Nenhum evento futuro para hoje.</span>'
-                '</div></div>')
+                '</div>'
+                '<button type="button" class="btn btn-xs btn-ghost btn-circle" onclick="document.getElementById(\'proximos-eventos\').style.display = \'none\'" title="Fechar">✕</button>'
+                '</div>')
     
     linhas = "".join(
         f'<div class="flex items-center gap-2 p-1">'
@@ -281,14 +283,15 @@ def render_proximos_eventos_dia(d):
         f'</div>'
         for occ, e in itens)
     
-    return f'''<div id="proximos-eventos" class="alert alert-warning shadow-sm">
-  <div class="flex items-center justify-between mb-2">
-    <span class="font-semibold">Próximos eventos de hoje ({len(itens)}):</span>
-  </div>
-  <div class="space-y-1 max-h-60 overflow-y-auto">
-    {linhas}
-  </div>
-</div>'''
+    return f'''<div id="proximos-eventos" class="alert alert-warning shadow-sm my-4">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="font-semibold">Próximos eventos de hoje ({len(itens)}):</span>
+                </div>
+                <div class="space-y-1 max-h-60 overflow-y-auto">
+                  {linhas}
+                </div>
+                <button type="button" class="btn btn-xs btn-ghost btn-circle" onclick="document.getElementById('proximos-eventos').style.display = 'none'" title="Fechar">✕</button>
+              </div>'''
 
 
 def render_alerts_banner():
@@ -303,7 +306,9 @@ def render_alerts_banner():
         for occ, e in itens)
     return (f'<div id="alerts-banner" class="alert alert-error shadow-sm">'
             f'<div class="flex flex-wrap gap-2 items-center">'
-            f'<span class="font-semibold">⚠ Eventos iniciando em 30 min:</span>{linhas}</div></div>')
+            f'<span class="font-semibold">⚠ Eventos iniciando em 30 min:</span>{linhas}</div>'
+            f'<button type="button" class="btn btn-xs btn-ghost btn-circle" onclick="document.getElementById(\'alerts-banner\').style.display = \'none\'" title="Fechar">✕</button>'
+            f'</div>')
 
 
 def render_google_events_list(google_events, mode="importados"):
@@ -460,7 +465,6 @@ def render_page(sel):
     <div id="alerts-container">
         {alerts_html}
         {proximos_html}
-        <button type="button" class="btn btn-xs btn-ghost btn-circle" onclick="document.getElementById('alerts-container').style.display = 'none'" title="Fechar">✕</button>
     </div>
     <div id="sync-container">
         <div id="sync-status" class="alert alert-info shadow-sm htmx-indicator">
