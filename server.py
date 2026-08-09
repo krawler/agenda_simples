@@ -356,13 +356,17 @@ def render_google_events_list(google_events, mode="importados"):
         else:
             falta_str = f"em {faltam} min"
 
+        # Simplified rendering for each event
         linhas.append(
-            f'<div class="flex ...">  # truncated for brevity
+            f'<div class="flex items-center gap-2">'
+            f'<span class="badge badge-primary">{esc(titulo)}</span>'
+            f'<span class="text-xs opacity-70">{falta_str}</span>'
+            f'</div>'
         )
     
     return f'''<div id="google-events-list-{mode}" class="alert {alert_class} shadow-sm">
-                <div class="flex ...">  # truncated
-                </div>
+                <div class="flex flex-col gap-2">{titulo_header}</div>
+                {"".join(linhas)}
               </div>'''
 
 
@@ -388,13 +392,21 @@ def render_sync_status(status_msg="", is_loading=False, auto_hide=False, google_
                 document.getElementById('sync-status').style.display = 'none';
               }, 3000);
             </script>'''
-            html_output.append(f'''<div id="sync-status" class="alert {alert_class} shadow-sm">
-          <div class="flex ...'>  # truncated
-        )
+        html_output.append(f'''<div id="sync-status" class="alert {alert_class} shadow-sm">
+          <div class="flex items-center gap-2">
+            <span class="text-lg font-semibold">{status_msg}</span>
+          </div>
+        </div>{auto_hide_script}''')
     else:
         html_output.append('<div id="sync-status"></div>')
 
-    # ... rest of function omitted for brevity
+    # Render imported events if provided
+    if google_events_importados:
+        html_output.append(render_google_events_list(google_events_importados, mode="importados"))
+    # Render exported events if provided
+    if google_events_exportados:
+        html_output.append(render_google_events_list(google_events_exportados, mode="exportados"))
+
     return "".join(html_output)
 
 
