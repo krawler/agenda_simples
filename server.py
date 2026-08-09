@@ -364,14 +364,14 @@ def render_google_events_list(google_events, mode="importados"):
         )
     
     return f'''<div id="google-events-list-{mode}" class="alert {alert_class} shadow-sm">
-  <div class="flex items-center justify-between mb-2">
-    <span class="font-semibold">{titulo_header} ({len(google_events)}):</span>
-  </div>
-  <div class="space-y-1 max-h-40 overflow-y-auto">
-    {"".join(linhas)}
-  </div>
-  <button type="button" class="btn btn-xs btn-ghost btn-circle" onclick="document.getElementById('google-events-list-{mode}').style.display = 'none'" title="Fechar">✕</button>
-</div>'''
+                <div class="flex items-center justify-between mb-2">
+                  <span class="font-semibold">{titulo_header} ({len(google_events)}):</span>
+                </div>
+                <div class="space-y-1 max-h-40 overflow-y-auto">
+                  {"".join(linhas)}
+                </div>
+                <button type="button" class="btn btn-xs btn-ghost btn-circle" onclick="document.getElementById('google-events-list-{mode}').style.display = 'none'" title="Fechar">✕</button>
+              </div>'''
 
 
 def render_sync_status(status_msg="", is_loading=False, auto_hide=False, google_events_importados=None, google_events_exportados=None):
