@@ -124,7 +124,6 @@ def render_controls(ano_atual=None):
         hx-swap="innerHTML">Próx. evento</button>
       <button class="btn btn-sm btn-primary" hx-post="/sync" hx-target="#sync-status"
         hx-swap="outerHTML" hx-indicator="#sync-status">☁ Sinc. Google </button>
-      <span id="sync-indicator" class="loading loading-bars loading-xl htmx-indicator"></span>
     </div>
   </div>
 </div>'''
@@ -425,6 +424,7 @@ def render_sync_status(status_msg="", is_loading=False, auto_hide=False, google_
                       <span class="loading loading-spinner loading-sm"></span>
                       <span>Sincronizando com Google Calendar...</span>
                     </div>
+                    <button type="button" class="btn btn-xs btn-ghost btn-circle" onclick="document.getElementById("sync-status").style.display = "none" title="Fechar">✕</button>
                   </div>'''
     
     html_output = []
@@ -533,6 +533,7 @@ def render_page(sel):
             <span class="loading loading-bars loading-md"></span>
             <span class="text-lg font-semibold">&nbsp;&nbsp;Sincronizando com Google Calendar...</span>
           </div>
+          <button type="button" class="btn btn-xs btn-ghost btn-circle" onclick="document.getElementById("sync-status").style.display = "none" title="Fechar">✕</button>
         </div>
         {sync_html}
     </div>
