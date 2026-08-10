@@ -494,40 +494,55 @@ def render_page(sel):
       document.documentElement.setAttribute("data-theme", v);
       localStorage.setItem("tema", v);
     }}
+    
+    // Função para inicializar balões de dica em elementos com data-balloon-content
+    function initBalloons() {{
+      $("[data-balloon-content]").each(function() {{
+        var $el = $(this);
+        // Só inicializa se ainda não foi inicializado
+        if (!$el.data("balloon-initialized")) {{
+          $el.data("balloon-initialized", true);
+          $el.balloon({{
+            position: "right",
+            offsetX: 10,
+            offsetY: 0,
+            tipSize: 8,
+            showDuration: 100,
+            hideDuration: 80,
+            css: {{
+              fontSize: "14px",
+              padding: "8px",
+              backgroundColor: "#000",
+              color: "#fff",
+              borderRadius: "6px"
+            }}
+          }});
+          
+          // Mostra balão no foco
+          $el.on("focus", function() {{
+            $el.showBalloon();
+          }});
+          
+          // Esconde balão quando perde foco
+          $el.on("blur", function() {{
+            $el.hideBalloon();
+          }});
+        }}
+      }});
+    }}
+    
     document.addEventListener("DOMContentLoaded", function () {{
       var sel = document.getElementById("tema");
       var t = localStorage.getItem("tema");
       if (sel && t) sel.value = t;
       
-      // Inicializa os balões de dica com foco (focus) em vez de hover
-      $("[data-balloon-content]").each(function() {{
-        var $el = $(this);
-        $el.balloon({{
-          position: "right",
-          offsetX: 10,
-          offsetY: 0,
-          tipSize: 8,
-          showDuration: 100,
-          hideDuration: 80,
-          css: {{
-            fontSize: "14px",
-            padding: "8px",
-            backgroundColor: "#000",
-            color: "#fff",
-            borderRadius: "6px"
-          }}
-        }});
-        
-        // Mostra balão no foco
-        $el.on("focus", function() {{
-          $el.showBalloon();
-        }});
-        
-        // Esconde balão quando perde foco
-        $el.on("blur", function() {{
-          $el.hideBalloon();
-        }});
-      }});
+      // Inicializa balões de dica
+      initBalloons();
+    }});
+    
+    // Inicializa balões de dica após qualquer troca do HTMX
+    document.body.addEventListener("htmx:afterSwap", function(evt) {{
+      initBalloons();
     }});
   </script>
 </head>
