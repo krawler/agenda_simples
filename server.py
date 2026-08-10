@@ -188,22 +188,43 @@ def render_edit_form(e, occ, panel_date):
     <input type="hidden" name="id" value="{e["id"]}">
     <input type="hidden" name="panel_date" value="{iso}">
     <input name="titulo" required value="{esc(e["titulo"])}"
-      class="input input-bordered input-sm w-full">
+      class="input input-bordered input-sm w-full"
+      data-balloon-content="Preencha o título do evento"
+      data-balloon-pos="right"
+      data-balloon-class="balloon-dark">
     <div class="flex gap-2">
       <input type="date" name="date" value="{base.date().isoformat()}" required
-        class="input input-bordered input-sm flex-1">
+        class="input input-bordered input-sm flex-1"
+        data-balloon-content="Selecione a data do evento"
+        data-balloon-pos="right"
+        data-balloon-class="balloon-dark">
       <input type="time" name="time" value="{base:%H:%M}" required
-        class="input input-bordered input-sm w-28">
+        class="input input-bordered input-sm w-28"
+        data-balloon-content="Defina a hora de início"
+        data-balloon-pos="right"
+        data-balloon-class="balloon-dark">
     </div>
     <div class="flex gap-2">
       <input type="number" name="dur" min="1" value="{e.get('dur') or ''}"
-        placeholder="min" class="input input-bordered input-sm w-24 duration-field" id="dur-edit-{e['id']}">
-      <select name="repeat" class="select select-bordered select-sm flex-1">{opts}</select>
+        placeholder="min" class="input input-bordered input-sm w-24 duration-field" id="dur-edit-{e['id']}"
+        data-balloon-content="Duração em minutos"
+        data-balloon-pos="right"
+        data-balloon-class="balloon-dark">
+      <select name="repeat" class="select select-bordered select-sm flex-1"
+        data-balloon-content="Tipo de repetição"
+        data-balloon-pos="right"
+        data-balloon-class="balloon-dark">{opts}</select>
     </div>
     <input name="desc" value="{esc(e.get('desc') or '')}" placeholder="Descrição"
-      class="input input-bordered input-sm w-full">
+      class="input input-bordered input-sm w-full"
+      data-balloon-content="Descrição opcional do evento"
+      data-balloon-pos="right"
+      data-balloon-class="balloon-dark">
     <input type="date" name="until" value="{esc(e.get('until') or '')}"
-      title="repetir até" class="input input-bordered input-sm w-full">
+      title="repetir até" class="input input-bordered input-sm w-full"
+      data-balloon-content="Data limite para repetição"
+      data-balloon-pos="right"
+      data-balloon-class="balloon-dark">
     <div class="flex gap-2">
       <button type="submit" class="btn btn-primary btn-sm flex-1">Salvar</button>
       <button type="button" class="btn btn-ghost btn-sm"
@@ -235,24 +256,45 @@ def render_day_panel(d, editando=None):
     <form hx-post="/event" hx-target="#day-panel" class="space-y-2" data-duration-confirm>
       <input type="hidden" name="panel_date" value="{iso}">
       <input name="titulo" required placeholder="Título"
-        class="input input-bordered input-sm w-full">
+        class="input input-bordered input-sm w-full"
+        data-balloon-content="Preencha o título do evento"
+        data-balloon-pos="right"
+        data-balloon-class="balloon-dark">
       <div class="flex gap-2">
         <input type="date" name="date" value="{iso}" required
-          class="input input-bordered input-sm flex-1">
+          class="input input-bordered input-sm flex-1"
+          data-balloon-content="Selecione a data do evento"
+          data-balloon-pos="right"
+          data-balloon-class="balloon-dark">
         <input type="time" name="time" value="09:00" required
-          class="input input-bordered input-sm w-28">
+          class="input input-bordered input-sm w-28"
+          data-balloon-content="Defina a hora de início"
+          data-balloon-pos="right"
+          data-balloon-class="balloon-dark">
         <input type="number" name="dur" min="1" placeholder="min"
-          class="input input-bordered input-sm w-24 duration-field" id="dur-new" title="duração em minutos">
+          class="input input-bordered input-sm w-24 duration-field" id="dur-new" title="duração em minutos"
+          data-balloon-content="Duração em minutos"
+          data-balloon-pos="right"
+          data-balloon-class="balloon-dark">
       </div>
       <div class="flex gap-2">
-        <select name="repeat" class="select select-bordered select-sm flex-1">
+        <select name="repeat" class="select select-bordered select-sm flex-1"
+          data-balloon-content="Tipo de repetição"
+          data-balloon-pos="right"
+          data-balloon-class="balloon-dark">
           {opts}
         </select>
         <input type="date" name="until" title="repetir até (opcional)"
-        class="input input-bordered input-sm w-full">
+        class="input input-bordered input-sm w-full"
+        data-balloon-content="Data limite para repetição (opcional)"
+        data-balloon-pos="right"
+        data-balloon-class="balloon-dark">
       </div>
       <input name="desc" placeholder="Descrição (opcional)"
-        class="input input-bordered input-sm w-full">
+        class="input input-bordered input-sm w-full"
+        data-balloon-content="Descrição opcional do evento"
+        data-balloon-pos="right"
+        data-balloon-class="balloon-dark">
       <button type="submit" class="btn btn-primary btn-sm w-full">Adicionar</button>
     </form>'''
 
@@ -441,6 +483,8 @@ def render_page(sel):
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" rel="stylesheet">
   <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/urin/jquery.balloon.js/jquery.balloon.min.js"></script>
   <script>
     (function () {{
       var t = localStorage.getItem("tema");
@@ -454,6 +498,23 @@ def render_page(sel):
       var sel = document.getElementById("tema");
       var t = localStorage.getItem("tema");
       if (sel && t) sel.value = t;
+      
+      // Inicializa os balões de dica
+      $("[data-balloon-content]").balloon({{
+        position: "right",
+        offsetX: 10,
+        offsetY: 0,
+        tipSize: 8,
+        showDuration: 100,
+        hideDuration: 80,
+        css: {{
+          fontSize: "14px",
+          padding: "8px",
+          backgroundColor: "#000",
+          color: "#fff",
+          borderRadius: "6px"
+        }}
+      }});
     }});
   </script>
 </head>
