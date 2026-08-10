@@ -499,21 +499,34 @@ def render_page(sel):
       var t = localStorage.getItem("tema");
       if (sel && t) sel.value = t;
       
-      // Inicializa os balões de dica
-      $("[data-balloon-content]").balloon({{
-        position: "right",
-        offsetX: 10,
-        offsetY: 0,
-        tipSize: 8,
-        showDuration: 100,
-        hideDuration: 80,
-        css: {{
-          fontSize: "14px",
-          padding: "8px",
-          backgroundColor: "#000",
-          color: "#fff",
-          borderRadius: "6px"
-        }}
+      // Inicializa os balões de dica com foco (focus) em vez de hover
+      $("[data-balloon-content]").each(function() {{
+        var $el = $(this);
+        $el.balloon({{
+          position: "right",
+          offsetX: 10,
+          offsetY: 0,
+          tipSize: 8,
+          showDuration: 100,
+          hideDuration: 80,
+          css: {{
+            fontSize: "14px",
+            padding: "8px",
+            backgroundColor: "#000",
+            color: "#fff",
+            borderRadius: "6px"
+          }}
+        }});
+        
+        // Mostra balão no foco
+        $el.on("focus", function() {{
+          $el.showBalloon();
+        }});
+        
+        // Esconde balão quando perde foco
+        $el.on("blur", function() {{
+          $el.hideBalloon();
+        }});
       }});
     }});
   </script>
