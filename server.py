@@ -313,7 +313,7 @@ def render_proximos_eventos_dia(d):
                 '<div class="flex items-center gap-2">'
                 '<span class="opacity-50">Nenhum evento futuro para hoje.</span>'
                 '</div>'
-                '<button type="button" class="btn btn-xs btn-ghost btn-circle" onclick="document.getElementById(\'proximos-eventos\').style.display = \'none\'" title="Fechar">✕</button>'
+                '<button type="button" class="btn btn-xs btn-ghost btn-circle close-btn" data-close-target="proximos-eventos" title="Fechar">✕</button>'
                 '</div>')
     
     linhas = "".join(
@@ -330,7 +330,7 @@ def render_proximos_eventos_dia(d):
                 <div class="space-y-1 max-h-60 overflow-y-auto">
                   {linhas}
                 </div>
-                <button type="button" class="btn btn-xs btn-ghost btn-circle" onclick="document.getElementById('proximos-eventos').style.display = 'none'" title="Fechar">✕</button>
+                <button type="button" class="btn btn-xs btn-ghost btn-circle close-btn" data-close-target="proximos-eventos" title="Fechar">✕</button>
               </div>'''
 
 
@@ -347,7 +347,7 @@ def render_alerts_banner():
     return (f'<div id="alerts-banner" class="alert alert-error shadow-sm">'
             f'<div class="flex flex-wrap gap-2 items-center">'
             f'<span class="font-semibold">⚠ Eventos iniciando em 30 min:</span>{linhas}</div>'
-            f'<button type="button" class="btn btn-xs btn-ghost btn-circle" onclick="document.getElementById(\'alerts-banner\').style.display = \'none\'" title="Fechar">✕</button>'
+            f'<button type="button" class="btn btn-xs btn-ghost btn-circle close-btn" data-close-target="alerts-banner" title="Fechar">✕</button>'
             f'</div>'
             f'</div>')
 
@@ -455,7 +455,7 @@ def render_google_events_list(google_events, mode="importados"):
     return f'''<div id="google-events-list-{mode}" class="{alert_class}">
                 <div class="flex items-center justify-between mb-3">
                   <span class="font-semibold">{titulo_header}</span>
-                  <button type="button" class="btn btn-xs btn-ghost btn-circle" onclick="document.getElementById('google-events-list-{mode}').style.display = 'none'" title="Fechar">✕</button>
+                  <button type="button" class="btn btn-xs btn-ghost btn-circle close-btn" data-close-target="google-events-list-{mode}" title="Fechar">✕</button>
                 </div>
                 <div class="space-y-3 max-h-80 overflow-y-auto">
                 {"".join(linhas)}
@@ -473,6 +473,7 @@ def render_sync_status(status_msg="", detail_msg="", is_loading=False, auto_hide
                         <span class="font-semibold">Sincronizando com Google Calendar...</span>
                       </div>
                       <div id="sync-status-detail" class="text-sm opacity-70">{esc(detail_msg)}</div>
+                      <button type="button" class="btn btn-xs btn-ghost btn-circle close-btn" data-close-target="sync-status" title="Fechar">✕</button>
                     </div>
                   </div>'''
     
@@ -492,6 +493,7 @@ def render_sync_status(status_msg="", detail_msg="", is_loading=False, auto_hide
           <div class="flex flex-col gap-3 p-4">
             <span class="text-lg font-semibold">Status da sincronização</span>
             <span id="sync-status-detail" class="text-sm opacity-70">{esc(status_msg)} {esc(detail_msg)}</span>
+            <button type="button" class="btn btn-xs btn-ghost btn-circle close-btn" data-close-target="sync-status" title="Fechar">✕</button>
           </div>
         </div>{auto_hide_script}''')
     else:
@@ -612,6 +614,16 @@ def render_page(sel):
           }});
       }});
     }}
+
+    function initCloseButtons() {{
+      $(document).on('click', '.close-btn', function(event) {{
+        event.preventDefault();
+        var targetId = $(this).data('close-target');
+        if (targetId) {{
+          $('#' + targetId).hide();
+        }}
+      }});
+    }}
     
     document.addEventListener("DOMContentLoaded", function () {{
       var sel = document.getElementById("tema");
@@ -620,6 +632,7 @@ def render_page(sel):
       
       // Inicializa balões de dica
       initBalloons();
+      initCloseButtons();
     }});
 
     $(document).ready(function() {{
@@ -654,8 +667,11 @@ def render_page(sel):
 
             var html = '<div class="flex flex-col gap-2">'
               + '<span class="text-lg font-semibold">Sincronizando com Google Calendar...</span>'
-              + '<span id="sync-status-detail" class="text-sm opacity-70">' + data.status + '</span>'
-              + '</div>';
+              + ' <div class="space-y-1 max-h-60 overflow-y-auto">'
+              + '   <span id="sync-status-detail" class="text-sm opacity-70">' + data.status + '</span>'
+              + ' </div>'
+              + ' <button type="button" class="btn btn-xs btn-ghost btn-circle close-btn" data-close-target="sync-status" title="Fechar">✕</button>'
+              + '</div>'
 
             $syncStatus.attr('class', alertClass).html(html).slideDown(200);
           }}
@@ -740,7 +756,7 @@ def render_page(sel):
         return '<div id="google-events-list-' + mode + '" class="' + listClass + '">' 
           + '<div class="flex items-center justify-between mb-3">'
           + '<span class="font-semibold">' + modeLabel + '</span>'
-          + '<button type="button" class="btn btn-xs btn-ghost btn-circle" onclick="document.getElementById("google-events-list-' + mode + '").style.display = "none" title="Fechar">✕</button>'
+          + '<button type="button" class="btn btn-xs btn-ghost btn-circle close-btn" data-close-target="google-events-list-' + mode + '" title="Fechar">✕</button>'
           + '</div>'
           + '<div class="space-y-3 max-h-80 overflow-y-auto">' + items + '</div>'
           + '</div>';
