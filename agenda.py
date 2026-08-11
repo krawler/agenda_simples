@@ -189,6 +189,32 @@ def expandir(eventos, wstart, wend):
     return itens
 
 
+def tem_ocorrencia_futura(e, agora=None):
+    """Retorna True se o evento tem pelo menos uma ocorrência futura."""
+    if agora is None:
+        agora = datetime.now()
+
+    if not e.get("repeat"):
+        try:
+            inicio_dt = evento_inicio(e)
+        except Exception:
+            return False
+        return inicio_dt >= agora
+
+    if e.get("until"):
+        try:
+            until_date = parse_data(e["until"])
+        except Exception:
+            return False
+        if until_date < agora.date():
+            return False
+
+    # Verifica próximas ocorrências na janela de um ano para eventos recorrentes
+    wstart = agora
+    wend = agora + timedelta(days=365)
+    return bool(ocorrencias(e, wstart, wend))
+
+
 def formatar(e, ini):
     linha = f"  [{e['id']:>3}] {ini:%H:%M}"
     if e.get("dur"):
@@ -288,23 +314,34 @@ def event_to_google_event(e, occ):
     
     # Handle recurrence
     if e.get("repeat") and e["repeat"] != "none":
-        rrule = []
         rep = e["repeat"]
+        rrule_parts = []
         if rep == "daily":
-            rrule.append("RRULE:FREQ=DAILY")
+            rrule_parts.append("FREQ=DAILY")
         elif rep == "weekdays":
-            rrule.append("RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR")
+            rrule_parts.append("FREQ=WEEKLY")
+            rrule_parts.append("BYDAY=MO,TU,WE,TH,FR")
         elif rep == "weekly":
-            rrule.append("RRULE:FREQ=WEEKLY")
+            rrule_parts.append("FREQ=WEEKLY")
         elif rep == "monthly":
-            rrule.append("RRULE:FREQ=MONTHLY")
-        
+            rrule_parts.append("FREQ=MONTHLY")
+
         if e.get("until"):
-            until_date = parse_data(e["until"])
-            rrule.append(f"UNTIL={until_date.strftime('%Y%m%dT%H%M%SZ')}")
-        
-        if rrule:
-            google_event['recurrence'] = rrule
+            try:
+                until_date = parse_data(e["until"])
+                # If parse_data returned a date without time, combine with the event start time
+                try:
+                    until_dt = datetime.combine(until_date, inicio.time())
+                except Exception:
+                    until_dt = until_date
+                until_str = until_dt.strftime('%Y%m%dT%H%M%SZ')
+                rrule_parts.append(f"UNTIL={until_str}")
+            except Exception:
+                # If parsing fails, skip adding UNTIL to avoid sending invalid recurrence
+                pass
+
+        if rrule_parts:
+            google_event['recurrence'] = ["RRULE:" + ";".join(rrule_parts)]
     
     return google_event
 
@@ -506,7 +543,7 @@ def sync_all_to_google(on_progress=None):
             except ValueError:
                 inicio_dt = datetime.fromisoformat(ini.split(' ')[0] + 'T00:00:00')
 
-        if inicio_dt < datetime.now():
+        if inicio_dt < datetime.now() and not tem_ocorrencia_futura(e):
             continue
         
         # Tenta sincronizar: se tem google_id e ele existe no Google, atualiza; senão cria novo
