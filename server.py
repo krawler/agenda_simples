@@ -25,9 +25,9 @@ import agenda  # reaproveita carregar/salvar/expandir/proximo_id/FMT/REPEATS/...
 
 WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"]
 TEMAS = ["light", "dark", "cupcake", "corporate", "emerald", "synthwave",
-         "dracula", "night", "coffee", "winter"]
+           "dracula", "night", "coffee", "winter"]
 MESES = ["", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-         "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
+           "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
 ANOS_DISPONIVEIS = [2025, 2026, 2027, 2028]
 
 
@@ -181,6 +181,21 @@ def render_edit_form(e, occ, panel_date):
         f'<option value="{r}"{" selected" if r == (e.get("repeat") or "none") else ""}>'
         f'{"sem repetição" if r == "none" else r}</option>'
         for r in agenda.REPEATS)
+    
+    # Opções de status
+    status_opts = ""
+    current_status = ""
+    if e.get("cancelado"):
+        current_status = "cancelado"
+    elif e.get("concluido"):
+        current_status = "concluido"
+    
+    status_opts = ''.join([
+        f'<option value=""{" selected" if current_status == "" else ""}>Selecione um status</option>',
+        f'<option value="concluido"{" selected" if current_status == "concluido" else ""}>Concluído</option>',
+        f'<option value="cancelado"{" selected" if current_status == "cancelado" else ""}>Cancelado</option>'
+    ])
+
     return f'''<li class="p-3 rounded-lg bg-base-200 ring ring-primary ring-1">
   <form hx-post="/update" hx-target="#day-panel" class="space-y-2" data-duration-confirm>
     <input type="hidden" name="id" value="{e["id"]}">
@@ -223,6 +238,14 @@ def render_edit_form(e, occ, panel_date):
       data-balloon-content="Data limite para repetição"
       data-balloon-pos="right"
       data-balloon-class="balloon-dark">
+    <div class="flex gap-2">
+      <select name="status" class="select select-bordered select-sm flex-1"
+        data-balloon-content="Status do evento"
+        data-balloon-pos="right"
+        data-balloon-class="balloon-dark">
+        {status_opts}
+      </select>
+    </div>
     <div class="flex gap-2">
       <button type="submit" class="btn btn-primary btn-sm flex-1">Salvar</button>
       <button type="button" class="btn btn-ghost btn-sm"
@@ -948,6 +971,8 @@ class Handler(BaseHTTPRequestHandler):
             "desc": (form.get("desc") or "").strip() or None,
             "repeat": None if rep == "none" else rep,
             "until": until,
+            "concluido": False,
+            "cancelado": False
         })
         agenda.salvar(eventos)
         painel = self._parse_date(form.get("panel_date")) or d
@@ -972,6 +997,19 @@ class Handler(BaseHTTPRequestHandler):
             e["desc"] = (form.get("desc") or "").strip() or None
             e["repeat"] = None if rep == "none" else rep
             e["until"] = form.get("until", "").strip() or None
+            
+            # Atualiza status (concluido/cancelado)
+            status = form.get("status", "").strip()
+            if status == "concluido":
+                e["concluido"] = True
+                e["cancelado"] = False
+            elif status == "cancelado":
+                e["cancelado"] = True
+                e["concluido"] = False
+            elif status == "":
+                e["concluido"] = False
+                e["cancelado"] = False
+            
             agenda.salvar(eventos)
         self._responder_com_calendario(self._parse_date(form.get("panel_date")))
 
