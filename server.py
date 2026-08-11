@@ -23,7 +23,7 @@ from urllib.parse import parse_qs, urlparse
 
 import agenda  # reaproveita carregar/salvar/expandir/proximo_id/FMT/REPEATS/...
 
-WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
+WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"]
 TEMAS = ["light", "dark", "cupcake", "corporate", "emerald", "synthwave",
          "dracula", "night", "coffee", "winter"]
 MESES = ["", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -352,6 +352,28 @@ def render_alerts_banner():
             f'</div>')
 
 
+def format_event_datetime_br(value):
+    if not value:
+        return ""
+    texto = str(value).strip()
+    if " " in texto and "T" not in texto:
+        texto = texto.replace(" ", "T")
+    if texto.endswith("Z"):
+        texto = texto[:-1] + "+00:00"
+    try:
+        if "T" in texto:
+            dt = datetime.fromisoformat(texto)
+            return dt.strftime("%d/%m/%Y às %H:%M")
+        dt = date.fromisoformat(texto)
+        return dt.strftime("%d/%m/%Y")
+    except Exception:
+        try:
+            dt = datetime.strptime(texto, "%Y-%m-%d %H:%M")
+            return dt.strftime("%d/%m/%Y às %H:%M")
+        except Exception:
+            return esc(value)
+
+
 def render_google_events_list(google_events, mode="importados"):
     """
     Renderiza lista de eventos do Google Calendar.
@@ -367,7 +389,7 @@ def render_google_events_list(google_events, mode="importados"):
     linhas = []
     
     # Define cores baseadas no modo
-    alert_class = "alert-info" if mode == "importados" else "alert-success my-4"
+    alert_class = "alert alert-info shadow-sm mt-4" if mode == "importados" else "alert alert-success shadow-sm mt-4"
     titulo_header = "Eventos Importados do Google" if mode == "importados" else "Eventos Exportados para o Google"
 
     for ge in google_events:
@@ -376,11 +398,26 @@ def render_google_events_list(google_events, mode="importados"):
             # Evento real do Google Calendar
             start = ge['start'].get('dateTime', ge['start'].get('date'))
             titulo = ge.get('summary', 'Sem título')
+            descricao = ge.get('description', '')
+            repeticao = ge.get('recurrence', '')
+            until = ''
+            if isinstance(repeticao, list) and repeticao:
+                repeticao = repeticao[0]
         else:
-            # Nosso dict simplificado (exportados)
+            # Nosso dict simplificado (exportados/importados)
             start = ge.get('inicio', '')
             titulo = ge.get('titulo', 'Sem título')
-        
+            descricao = ge.get('desc', '') or ''
+            repeticao = ge.get('repeat', '')
+            until = ge.get('until', '')
+
+        start_fmt = format_event_datetime_br(start)
+        meta = []
+        if repeticao:
+            meta.append(esc(repeticao))
+        if until:
+            meta.append(f"até {esc(format_event_datetime_br(until))}")
+
         try:
             if 'T' in start:
                 occ = datetime.fromisoformat(start.replace('Z', '+00:00'))
@@ -391,10 +428,8 @@ def render_google_events_list(google_events, mode="importados"):
 
         if occ.tzinfo is None:
             referencia = agora
-            occ_fmt = occ
         else:
             referencia = datetime.now(occ.tzinfo)
-            occ_fmt = occ.astimezone()
 
         faltam = int((occ - referencia).total_seconds() // 60)
         if faltam < 0:
@@ -402,32 +437,43 @@ def render_google_events_list(google_events, mode="importados"):
         else:
             falta_str = f"em {faltam} min"
 
-        # Simplified rendering for each event
+        meta_html = ''.join(f'<span class="badge badge-outline badge-sm">{m}</span>' for m in meta)
+        descricao_html = f'<div class="text-sm opacity-70">{esc(descricao)}</div>' if descricao else ''
+
         linhas.append(
-            f'<div class="flex items-center gap-2">'
-            f'<span class="badge badge-primary">{esc(titulo)}</span>'
+            f'<div class="rounded-xl border border-base-300 bg-base-200 p-3 space-y-2">'
+            f'<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">'
+            f'<span class="font-semibold">{esc(titulo)}</span>'
             f'<span class="text-xs opacity-70">{falta_str}</span>'
+            f'</div>'
+            f'<div class="text-sm opacity-80">{esc(start_fmt)}</div>'
+            f'{descricao_html}'
+            f'{f"<div class=\"flex flex-wrap gap-2 text-xs opacity-60\">{meta_html}</div>" if meta_html else ""}'
             f'</div>'
         )
     
-    return f'''<div id="google-events-list-{mode}" class="alert {alert_class} shadow-sm">
-                <div class="flex flex-col gap-2">{titulo_header}</div>
-                <div class="space-y-1 max-h-60 overflow-y-auto">
+    return f'''<div id="google-events-list-{mode}" class="{alert_class}">
+                <div class="flex items-center justify-between mb-3">
+                  <span class="font-semibold">{titulo_header}</span>
+                  <button type="button" class="btn btn-xs btn-ghost btn-circle" onclick="document.getElementById('google-events-list-{mode}').style.display = 'none'" title="Fechar">✕</button>
+                </div>
+                <div class="space-y-3 max-h-80 overflow-y-auto">
                 {"".join(linhas)}
                 </div>
-                <button type="button" class="btn btn-xs btn-ghost btn-circle" onclick="document.getElementById('google-events-list-{mode}').style.display = 'none'" title="Fechar">✕</button>
               </div>'''
 
 
-def render_sync_status(status_msg="", is_loading=False, auto_hide=False, google_events_importados=None, google_events_exportados=None):
+def render_sync_status(status_msg="", detail_msg="", is_loading=False, auto_hide=False, google_events_importados=None, google_events_exportados=None):
     """Renderiza o status da sincronização e os dois quadros de eventos."""
     if is_loading:
-        return f'''<div id="sync-status" class="alert alert-info shadow-sm">
-                    <div class="flex items-center gap-2">
-                      <span class="loading loading-spinner loading-sm"></span>
-                      <span>Sincronizando com Google Calendar...</span>
+        return f'''<div id="sync-status" class="alert alert-info shadow-sm mt-4">
+                    <div class="flex flex-col gap-3 p-4">
+                      <div class="flex items-center gap-3">
+                        <span class="loading loading-spinner loading-sm"></span>
+                        <span class="font-semibold">Sincronizando com Google Calendar...</span>
+                      </div>
+                      <div id="sync-status-detail" class="text-sm opacity-70">{esc(detail_msg)}</div>
                     </div>
-                    <button type="button" class="btn btn-xs btn-ghost btn-circle" onclick="document.getElementById('sync-status').style.display = 'none'" title="Fechar">✕</button>
                   </div>'''
     
     html_output = []
@@ -442,9 +488,10 @@ def render_sync_status(status_msg="", is_loading=False, auto_hide=False, google_
                 document.getElementById('sync-status').style.display = 'none';
               }, 3000);
             </script>'''
-        html_output.append(f'''<div id="sync-status" class="alert {alert_class} shadow-sm">
-          <div class="flex items-center gap-2">
-            <span class="text-lg font-semibold">{status_msg}</span>
+        html_output.append(f'''<div id="sync-status" class="alert {alert_class} shadow-sm mt-4">
+          <div class="flex flex-col gap-3 p-4">
+            <span class="text-lg font-semibold">Status da sincronização</span>
+            <span id="sync-status-detail" class="text-sm opacity-70">{esc(status_msg)} {esc(detail_msg)}</span>
           </div>
         </div>{auto_hide_script}''')
     else:
@@ -512,6 +559,20 @@ def render_page(sel):
       localStorage.setItem("tema", v);
     }}
 
+    function trocarAnoCalendario(ano) {{
+      var cal = document.getElementById("calendar");
+      if (!cal) {{
+        console.warn("Calendário não encontrado.");
+        return;
+      }}
+      var mes = parseInt(cal.dataset.mes, 10) || (new Date().getMonth() + 1);
+      var sel = cal.dataset.sel || new Date().toISOString().slice(0, 10);
+      var url = "/calendar?year=" + encodeURIComponent(ano) +
+                "&month=" + encodeURIComponent(mes) +
+                "&sel=" + encodeURIComponent(sel);
+      htmx.ajax("GET", url, {{target: "#calendar", swap: "outerHTML"}});
+    }}
+
     // Função para inicializar balões de dica em elementos com data-balloon-content
     function initBalloons() {{
       $("[data-balloon-content]").each(function() {{
@@ -563,32 +624,131 @@ def render_page(sel):
 
     $(document).ready(function() {{
       var $syncStatus = $("#sync-status");
+      var eventSource;
+
+      function startSyncStream() {{
+        if (eventSource) {{
+          eventSource.close();
+        }}
+
+        eventSource = new EventSource('/sync-stream');
+        $("#sync-google").prop('disabled', true);
+
+        eventSource.onmessage = function(event) {{
+          try {{
+            var data = JSON.parse(event.data);
+          }} catch (err) {{
+            return;
+          }}
+
+          if (data.status) {{
+            if ($syncStatus.length === 0) {{
+              $("#sync-container").html('<div id="sync-status"></div>');
+              $syncStatus = $("#sync-status");
+            }}
+            var alertClass = data.status.toLowerCase().includes('sucesso') || data.status.toLowerCase().includes('conclu')
+              ? 'alert alert-success shadow-sm'
+              : data.status.toLowerCase().includes('erro')
+                ? 'alert alert-error shadow-sm'
+                : 'alert alert-info shadow-sm';
+
+            var html = '<div class="flex flex-col gap-2">'
+              + '<span class="text-lg font-semibold">Sincronizando com Google Calendar...</span>'
+              + '<span id="sync-status-detail" class="text-sm opacity-70">' + data.status + '</span>'
+              + '</div>';
+
+            $syncStatus.attr('class', alertClass).html(html).slideDown(200);
+          }}
+
+          if (data.completed) {{
+            if (data.importados || data.exportados) {{
+              var listsHtml = '';
+              if (data.importados && data.importados.length) {{
+                listsHtml += renderSyncEventList(data.importados, 'importados');
+              }}
+              if (data.exportados && data.exportados.length) {{
+                listsHtml += renderSyncEventList(data.exportados, 'exportados');
+              }}
+              if (listsHtml) {{
+                $("#sync-container").append(listsHtml);
+              }}
+            }}
+            eventSource.close();
+            $("#sync-google").prop('disabled', false);
+          }}
+        }};
+
+        eventSource.onerror = function() {{
+          if (eventSource.readyState === EventSource.CLOSED) {{
+            $("#sync-google").prop('disabled', false);
+          }} else {{
+            $("#sync-status-detail").text('Erro de conexão com o servidor.');
+          }}
+        }};
+      }}
+
+      function formatDateTimeForDisplay(dateTime) {{
+        if (!dateTime) return '';
+        var normalized = String(dateTime).replace(' ', 'T');
+        if (normalized.endsWith('Z')) {{
+          normalized = normalized.replace(/Z$/, '+00:00');
+        }}
+        var date = new Date(normalized);
+        if (isNaN(date.getTime())) {{
+          return String(dateTime);
+        }}
+        var day = String(date.getDate()).padStart(2, '0');
+        var month = String(date.getMonth() + 1).padStart(2, '0');
+        var year = date.getFullYear();
+        var hours = String(date.getHours()).padStart(2, '0');
+        var minutes = String(date.getMinutes()).padStart(2, '0');
+        return day + '/' + month + '/' + year + ' às ' + hours + ':' + minutes;
+      }}
+
+      function renderSyncEventList(events, mode) {{
+        var modeLabel = mode === 'importados' ? 'Eventos Importados do Google' : 'Eventos Exportados para o Google';
+        var listClass = mode === 'importados' ? 'alert alert-info shadow-sm mt-4' : 'alert alert-success shadow-sm mt-4';
+        var items = events.map(function(ev) {{
+          var title = ev.titulo || ev.summary || 'Sem título';
+          var start = formatDateTimeForDisplay(ev.inicio || ev.start || '');
+          var description = ev.desc || ev.description || '';
+          var detalhes = [];
+          if (ev.repeat) {{
+            detalhes.push(ev.repeat);
+          }}
+          if (ev.until) {{
+            detalhes.push('até ' + ev.until);
+          }}
+          var metaHtml = detalhes.length
+            ? '<div class="flex flex-wrap gap-2 text-xs opacity-60 mt-1">' +
+                detalhes.map(function(d) {{ return '<span class="badge badge-outline badge-sm">' + $('<div>').text(d).html() + '</span>'; }}).join('') +
+              '</div>'
+            : '';
+          var descriptionHtml = description
+            ? '<div class="text-sm opacity-70">' + $('<div>').text(description).html() + '</div>'
+            : '';
+
+          return '<div class="rounded-xl border border-base-300 bg-base-200 p-4 space-y-2">'
+            + '<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">'
+            + '<span class="font-semibold">' + $('<div>').text(title).html() + '</span>'
+            + '<span class="text-xs opacity-70">' + $('<div>').text(start).html() + '</span>'
+            + '</div>'
+            + descriptionHtml
+            + metaHtml
+            + '</div>';
+        }}).join('');
+        return '<div id="google-events-list-' + mode + '" class="' + listClass + '">' 
+          + '<div class="flex items-center justify-between mb-3">'
+          + '<span class="font-semibold">' + modeLabel + '</span>'
+          + '<button type="button" class="btn btn-xs btn-ghost btn-circle" onclick="document.getElementById("google-events-list-' + mode + '").style.display = "none" title="Fechar">✕</button>'
+          + '</div>'
+          + '<div class="space-y-3 max-h-80 overflow-y-auto">' + items + '</div>'
+          + '</div>';
+      }}
+
       $("#sync-google").on("click", function(event) {{
         event.preventDefault();
-
-        var $loading = $("<div class='alert alert-info shadow-sm'>" +
-          "<div class='flex items-center gap-2'>" +
-          "<span class='loading loading-spinner loading-sm'></span>" +
-          "<span>Sincronizando com Google Calendar...</span>" +
-          "</div>" +
-          "</div>");
-
-        $syncStatus.stop(true, true).html($loading).slideDown(200);
-
-        $.post("/sync")
-          .done(function(response) {{
-            var $content = $(response);
-            if ($content.filter("#sync-status").length) {{
-              $syncStatus.replaceWith($content);
-              $syncStatus = $("#sync-status");
-            }} else {{
-              $syncStatus.html(response);
-            }}
-            $syncStatus.hide().slideDown(300);
-          }})
-          .fail(function() {{
-            $syncStatus.html('<div class="alert alert-error shadow-sm">Erro ao sincronizar. Tente novamente.</div>').hide().slideDown(300);
-          }});
+        startSyncStream();
       }});
     }});
     
@@ -643,6 +803,8 @@ def render_page(sel):
 
 # ------------------------------------------------------------------------- server
 class Handler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
     def _send(self, corpo, status=200):
         dados = corpo.encode("utf-8")
         self.send_response(status)
@@ -650,6 +812,14 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(dados)))
         self.end_headers()
         self.wfile.write(dados)
+
+    def _write_sse(self, data):
+        chunk = f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+        self.wfile.write(chunk.encode("utf-8"))
+        try:
+            self.wfile.flush()
+        except Exception:
+            pass
 
     def _parse_date(self, texto, padrao=None):
         try:
@@ -690,6 +860,8 @@ class Handler(BaseHTTPRequestHandler):
                 alerts_banner = render_alerts_banner()
                 proximos_eventos = render_proximos_eventos_dia(d)
                 self._send(alerts_banner + proximos_eventos)
+            case "/sync-stream":
+                self._stream_sync_status()
             case _:
                 self._send("<h1>404</h1>", 404)
 
@@ -712,6 +884,33 @@ class Handler(BaseHTTPRequestHandler):
             self._sincronizar_google()
         else:
             self._send("<h1>404</h1>", 404)
+
+    def _stream_sync_status(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Connection", "keep-alive")
+        self.end_headers()
+
+        def on_progress(msg):
+            self._write_sse({
+                "status": msg,
+                "completed": False
+            })
+
+        try:
+            msg, exportados, importados = agenda.sync_all_with_progress(on_progress=on_progress)
+            self._write_sse({
+                "status": msg,
+                "completed": True,
+                "exportados": exportados,
+                "importados": importados
+            })
+        except Exception as ex:
+            self._write_sse({
+                "status": f"Erro ao sincronizar: {ex}",
+                "completed": True
+            })
 
     def _criar_evento(self, form):
         d = self._parse_date(form.get("date"))
