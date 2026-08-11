@@ -122,8 +122,7 @@ def render_controls(ano_atual=None):
       </select>
       <button class="btn btn-sm btn-primary" hx-get="/alerts" hx-target="#alerts-container"
         hx-swap="innerHTML">Próx. evento</button>
-      <button class="btn btn-sm btn-primary" hx-post="/sync" hx-target="#sync-status"
-        hx-swap="outerHTML" hx-indicator="#sync-status">☁ Sinc. Google </button>
+      <button id="sync-google" class="btn btn-sm btn-primary">☁ Sinc. Google </button>
     </div>
   </div>
 </div>'''
@@ -349,6 +348,7 @@ def render_alerts_banner():
             f'<div class="flex flex-wrap gap-2 items-center">'
             f'<span class="font-semibold">⚠ Eventos iniciando em 30 min:</span>{linhas}</div>'
             f'<button type="button" class="btn btn-xs btn-ghost btn-circle" onclick="document.getElementById(\'alerts-banner\').style.display = \'none\'" title="Fechar">✕</button>'
+            f'</div>'
             f'</div>')
 
 
@@ -412,19 +412,22 @@ def render_google_events_list(google_events, mode="importados"):
     
     return f'''<div id="google-events-list-{mode}" class="alert {alert_class} shadow-sm">
                 <div class="flex flex-col gap-2">{titulo_header}</div>
+                <div class="space-y-1 max-h-60 overflow-y-auto">
                 {"".join(linhas)}
+                </div>
+                <button type="button" class="btn btn-xs btn-ghost btn-circle" onclick="document.getElementById('google-events-list-{mode}').style.display = 'none'" title="Fechar">✕</button>
               </div>'''
 
 
 def render_sync_status(status_msg="", is_loading=False, auto_hide=False, google_events_importados=None, google_events_exportados=None):
     """Renderiza o status da sincronização e os dois quadros de eventos."""
     if is_loading:
-        return f'''<div id="sync-status" class="alert alert-info shadow-sm htmx-indicator">
+        return f'''<div id="sync-status" class="alert alert-info shadow-sm">
                     <div class="flex items-center gap-2">
                       <span class="loading loading-spinner loading-sm"></span>
                       <span>Sincronizando com Google Calendar...</span>
                     </div>
-                    <button type="button" class="btn btn-xs btn-ghost btn-circle" onclick="document.getElementById("sync-status").style.display = "none" title="Fechar">✕</button>
+                    <button type="button" class="btn btn-xs btn-ghost btn-circle" onclick="document.getElementById('sync-status').style.display = 'none'" title="Fechar">✕</button>
                   </div>'''
     
     html_output = []
@@ -445,7 +448,7 @@ def render_sync_status(status_msg="", is_loading=False, auto_hide=False, google_
           </div>
         </div>{auto_hide_script}''')
     else:
-        html_output.append('<div id="sync-status"></div>')
+        html_output.append('<div id="sync-status" style="display:none;"></div>')
 
     # Render imported events if provided
     if google_events_importados:
@@ -482,6 +485,20 @@ def render_page(sel):
   <title>Agenda Simples</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" rel="stylesheet">
+  <style>
+    .balloon-dark {{
+      background-color: rgba(17, 24, 39, 0.96);
+      color: #f8fafc;
+      border: 1px solid rgba(148, 163, 184, 0.24);
+      box-shadow: 0 12px 32px rgba(15, 23, 42, 0.28);
+      border-radius: 0.5rem;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.92rem;
+      line-height: 1.3;
+      max-width: 240px;
+      word-break: break-word;
+    }}
+  </style>
   <script src="https://unpkg.com/htmx.org@1.9.12"></script>
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/urin/jquery.balloon.js/jquery.balloon.min.js"></script>
@@ -494,40 +511,44 @@ def render_page(sel):
       document.documentElement.setAttribute("data-theme", v);
       localStorage.setItem("tema", v);
     }}
-    
+
     // Função para inicializar balões de dica em elementos com data-balloon-content
     function initBalloons() {{
       $("[data-balloon-content]").each(function() {{
         var $el = $(this);
-        // Só inicializa se ainda não foi inicializado
-        if (!$el.data("balloon-initialized")) {{
-          $el.data("balloon-initialized", true);
-          $el.balloon({{
-            position: "right",
-            offsetX: 10,
-            offsetY: 0,
-            tipSize: 8,
-            showDuration: 100,
-            hideDuration: 80,
-            css: {{
-              fontSize: "14px",
-              padding: "8px",
-              backgroundColor: "#000",
-              color: "#fff",
-              borderRadius: "6px"
-            }}
-          }});
-          
-          // Mostra balão no foco
-          $el.on("focus", function() {{
-            $el.showBalloon();
-          }});
+        if ($el.data("balloon-initialized")) {{
+          return;
+        }}
+
+        var balloonContent = $el.data("balloon-content") || $el.attr("title") || $el.attr("aria-label");
+        if (!balloonContent) {{
+          return;
+        }}
+
+        $el.data("balloon-initialized", true);
+        $el.balloon({{
+          contents: balloonContent,
+          position: $el.data("balloon-pos") || "right",
+          classname: $el.data("balloon-class") || "balloon-dark",
+          offsetX: 10,
+          offsetY: 0,
+          tipSize: 8,
+          showDuration: 120,
+          hideDuration: 100,
+          css: {{
+            borderRadius: "6px"
+          }}
+        }});
+
+        // Mostra balão no foco para acessibilidade por teclado
+        $el.on("focus", function() {{
+          $el.showBalloon();
+        }});
           
           // Esconde balão quando perde foco
           $el.on("blur", function() {{
             $el.hideBalloon();
           }});
-        }}
       }});
     }}
     
@@ -539,9 +560,40 @@ def render_page(sel):
       // Inicializa balões de dica
       initBalloons();
     }});
+
+    $(document).ready(function() {{
+      var $syncStatus = $("#sync-status");
+      $("#sync-google").on("click", function(event) {{
+        event.preventDefault();
+
+        var $loading = $("<div class='alert alert-info shadow-sm'>" +
+          "<div class='flex items-center gap-2'>" +
+          "<span class='loading loading-spinner loading-sm'></span>" +
+          "<span>Sincronizando com Google Calendar...</span>" +
+          "</div>" +
+          "</div>");
+
+        $syncStatus.stop(true, true).html($loading).slideDown(200);
+
+        $.post("/sync")
+          .done(function(response) {{
+            var $content = $(response);
+            if ($content.filter("#sync-status").length) {{
+              $syncStatus.replaceWith($content);
+              $syncStatus = $("#sync-status");
+            }} else {{
+              $syncStatus.html(response);
+            }}
+            $syncStatus.hide().slideDown(300);
+          }})
+          .fail(function() {{
+            $syncStatus.html('<div class="alert alert-error shadow-sm">Erro ao sincronizar. Tente novamente.</div>').hide().slideDown(300);
+          }});
+      }});
+    }});
     
     // Inicializa balões de dica após qualquer troca do HTMX
-    document.body.addEventListener("htmx:afterSwap", function(evt) {{
+    document.addEventListener("htmx:afterSwap", function(evt) {{
       initBalloons();
     }});
   </script>
@@ -556,13 +608,6 @@ def render_page(sel):
         {proximos_html}
     </div>
     <div id="sync-container">
-        <div id="sync-status" class="alert alert-info shadow-sm htmx-indicator">
-          <div class="flex items-center gap-2">
-            <span class="loading loading-bars loading-md"></span>
-            <span class="text-lg font-semibold">&nbsp;&nbsp;Sincronizando com Google Calendar...</span>
-          </div>
-          <button type="button" class="btn btn-xs btn-ghost btn-circle" onclick="document.getElementById("sync-status").style.display = "none" title="Fechar">✕</button>
-        </div>
         {sync_html}
     </div>
     <div class="grid md:grid-cols-2 gap-4 items-start">
