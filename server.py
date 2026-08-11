@@ -271,6 +271,13 @@ def render_day_panel(d, editando=None):
         f'{"sem repetição" if r == "none" else r}</option>'
         for r in agenda.REPEATS)
 
+    # Opções de status para novo evento
+    status_opts_novo = ''.join([
+        '<option value="">Selecione um status</option>',
+        '<option value="concluido">Concluído</option>',
+        '<option value="cancelado">Cancelado</option>'
+    ])
+
     novo_evento = ""
     if editando is None:
         novo_evento = f'''<div class="divider my-2">Novo evento</div>
@@ -316,6 +323,14 @@ def render_day_panel(d, editando=None):
         data-balloon-content="Descrição opcional do evento"
         data-balloon-pos="right"
         data-balloon-class="balloon-dark">
+      <div class="flex gap-2">
+        <select name="status" class="select select-bordered select-sm flex-1"
+          data-balloon-content="Status do evento"
+          data-balloon-pos="right"
+          data-balloon-class="balloon-dark">
+          {status_opts_novo}
+        </select>
+      </div>
       <button type="submit" class="btn btn-primary btn-sm w-full">Adicionar</button>
     </form>'''
 
