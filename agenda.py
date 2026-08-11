@@ -458,13 +458,19 @@ def _deduplicate_by_google_id(event_list):
     return unique
 
 
-def sync_all_to_google():
+def sync_all_to_google(on_progress=None):
     """Sincroniza todos os eventos locais para o Google Calendar.
     Retorna: (eventos_exportados, erros)
     eventos_exportados = lista de dicts com info dos eventos NOVAMENTE CRIADOS no Google
     """
+    def progress(msg):
+        if on_progress:
+            on_progress(msg)
+        else:
+            print(msg)
+
     if not GOOGLE_AVAILABLE:
-        print("Bibliotecas do Google Calendar não instaladas.")
+        progress("Bibliotecas do Google Calendar não instaladas.")
         return [], 0
     
     eventos = carregar()
@@ -478,6 +484,8 @@ def sync_all_to_google():
     errors = 0
     created_google_ids = set()  # Track google_ids created in this sync
     
+    progress("Enviando eventos locais para Google Calendar...")
+
     for e in eventos:
 
          # Filtra eventos do passado - mantemos apenas eventos futuros
@@ -515,6 +523,8 @@ def sync_all_to_google():
                         "titulo": e["titulo"],
                         "inicio": e["inicio"],
                         "google_id": gid,
+                        "repeat": e.get("repeat"),
+                        "until": e.get("until"),
                         "action": action
                     })
         else:
@@ -523,17 +533,23 @@ def sync_all_to_google():
     if exportados or errors > 0:
         salvar(eventos)
     
-    print(f"Exportação para Google concluída: {len(exportados)} eventos novos, {errors} erros.")
+    progress(f"Exportação para Google concluída: {len(exportados)} eventos novos, {errors} erros.")
     return exportados, errors
 
 
-def sync_from_google():
+def sync_from_google(on_progress=None):
     """Busca eventos do Google Calendar que não estão na agenda local e adiciona.
     Retorna: (eventos_importados, erros)
     eventos_importados = lista de eventos do Google que foram importados
     """
+    def progress(msg):
+        if on_progress:
+            on_progress(msg)
+        else:
+            print(msg)
+
     if not GOOGLE_AVAILABLE:
-        print("Bibliotecas do Google Calendar não instaladas.")
+        progress("Bibliotecas do Google Calendar não instaladas.")
         return [], 0
     
     eventos = carregar()
@@ -623,11 +639,49 @@ def sync_from_google():
     
     if importados:
         salvar(eventos)
-        print(f"{len(importados)} eventos importados do Google Calendar.")
+        progress(f"{len(importados)} eventos importados do Google Calendar.")
     else:
-        print("Nenhum evento novo para importar do Google Calendar.")
+        progress("Nenhum evento novo para importar do Google Calendar.")
     
     return importados, errors
+
+
+def sync_all_with_progress(on_progress):
+    """
+    Sincroniza eventos com Google Calendar (bidirecional) e dispara callbacks de progresso.
+    Retorna: (status_msg, exportados, importados)
+    """
+    if not GOOGLE_AVAILABLE:
+        if on_progress:
+            on_progress("Bibliotecas do Google Calendar não instaladas.")
+        return "Bibliotecas do Google Calendar não instaladas.", [], []
+    
+    if not GOOGLE_CREDENTIALS_FILE.exists():
+        if on_progress:
+            on_progress("Arquivo de credenciais não encontrado.")
+        return "Arquivo de credenciais não encontrado.", [], []
+
+    if on_progress:
+        on_progress("Sincronizando com Google Calendar...")
+
+    try:
+        exportados, export_errors = sync_all_to_google(on_progress=on_progress)
+        importados, import_errors = sync_from_google(on_progress=on_progress)
+        
+        exportados = _deduplicate_by_google_id(exportados)
+        importados = _deduplicate_by_google_id(importados)
+        
+        total_errors = export_errors + import_errors
+        msg = "Sincronização concluída com sucesso!" if total_errors == 0 else f"Sincronização concluída com {total_errors} erro(s)."
+        if on_progress:
+            on_progress(msg)
+        return msg, exportados, importados
+    except RefreshError as e:
+        error_msg = "Não foi possível sincronizar, token de autenticação Google expirado"
+        if on_progress:
+            on_progress(error_msg)
+        print(f"Erro de autenticação: {e}")
+        return error_msg, [], []
 
 
 def sync_all_and_get_results():
@@ -643,30 +697,7 @@ def sync_all_and_get_results():
     if not GOOGLE_CREDENTIALS_FILE.exists():
         return "Arquivo de credenciais não encontrado.", [], []
     
-    print("Sincronizando com Google Calendar...")
-    
-    try:
-        # 1. Exporta eventos locais para o Google
-        print("Enviando eventos locais para Google Calendar...")
-        exportados, export_errors = sync_all_to_google()
-        
-        # 2. Importa eventos do Google que não estão no local
-        print("Buscando eventos do Google Calendar não presentes localmente...")
-        importados, import_errors = sync_from_google()
-        
-        # Deduplica resultados finais por google_id (segurança extra)
-        exportados = _deduplicate_by_google_id(exportados)
-        importados = _deduplicate_by_google_id(importados)
-        
-        total_errors = export_errors + import_errors
-        msg = "Sincronização concluída com sucesso!" if total_errors == 0 else f"Sincronização concluída com {total_errors} erro(s)."
-        
-        return msg, exportados, importados
-    except RefreshError as e:
-        # Token expirado ou revogado
-        error_msg = "Não foi possível sincronizar, token de autenticação Google expirado"
-        print(f"Erro de autenticação: {e}")
-        return error_msg, [], []
+    return sync_all_with_progress(on_progress=print)
 
 
 # ------------------------------------------------------------------------ main
