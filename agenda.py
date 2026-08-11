@@ -660,7 +660,9 @@ def sync_from_google(on_progress=None):
                 "desc": ge.get('description'),
                 "repeat": repeat,
                 "until": until,
-                "google_id": gid
+                "google_id": gid,
+                "concluido": False,
+                "cancelado": False
             }
             eventos.append(evento)
             imported_google_ids.add(gid)  # Adiciona ao set para evitar duplicatas no mesmo loop
@@ -737,6 +739,28 @@ def sync_all_and_get_results():
     return sync_all_with_progress(on_progress=print)
 
 
+# -------------------------------------------------------------- status events
+def marcar_eventos_passados_como_concluidos():
+    """Marca eventos passados como concluidos se ainda não estão concluidos ou cancelados."""
+    eventos = carregar()
+    agora = datetime.now()
+    alterado = False
+    for e in eventos:
+        # Só marca como concluido se não estiver cancelado
+        if not e.get("cancelado", False) and not e.get("concluido", False):
+            try:
+                inicio_dt = evento_inicio(e)
+                # Considera concluido se o evento já passou (início no passado)
+                # e não tem recorrência futura
+                if inicio_dt < agora and not tem_ocorrencia_futura(e):
+                    e["concluido"] = True
+                    alterado = True
+            except Exception:
+                pass
+    if alterado:
+        salvar(eventos)
+
+
 # ------------------------------------------------------------------------ main
 def cmd_new(args):
     eventos = carregar()
@@ -753,6 +777,8 @@ def cmd_new(args):
         "desc": args.desc,
         "repeat": None if args.repeat == "none" else args.repeat,
         "until": until,
+        "concluido": False,
+        "cancelado": False
     }
     eventos.append(evento)
     salvar(eventos)
@@ -794,10 +820,22 @@ def cmd_edit(args):
         evento["repeat"] = None if args.repeat == "none" else args.repeat
     if args.until is not None:
         evento["until"] = None if args.until in ("", "none") else str(parse_data(args.until))
+    
+    # Atualiza status (concluido/cancelado)
+    if args.status is not None:
+        if args.status == "concluido":
+            evento["concluido"] = True
+            evento["cancelado"] = False
+        elif args.status == "cancelado":
+            evento["cancelado"] = True
+            evento["concluido"] = False
+        elif args.status == "":
+            evento["concluido"] = False
+            evento["cancelado"] = False
 
     salvar(eventos)
     print(f"Evento {args.id} atualizado.")
-    print(formatar(evento, evento_inicio(evento)))
+    print(formatar(e=evento, ini=evento_inicio(evento)))
     
     # Sincroniza com Google Calendar se disponível
     if GOOGLE_AVAILABLE and GOOGLE_CREDENTIALS_FILE.exists():
@@ -911,6 +949,9 @@ def cmd_sync(args):
 
 # ------------------------------------------------------------------------ main
 def main():
+    # Marca eventos passados como concluidos ao iniciar
+    marcar_eventos_passados_como_concluidos()
+    
     p = argparse.ArgumentParser(description="Agenda de eventos simples.")
     sub = p.add_subparsers(dest="cmd", required=True)
 
@@ -932,6 +973,8 @@ def main():
     e.add_argument("--desc", default=None, help="descricao (vazio = remove)")
     e.add_argument("--repeat", choices=REPEATS, default=None)
     e.add_argument("--until", default=None, help="'YYYY-MM-DD' ou 'none' para remover")
+    e.add_argument("--status", default=None, choices=["", "concluido", "cancelado"],
+                   help="status do evento: 'concluido', 'cancelado' ou '' (limpa)")
     e.set_defaults(func=cmd_edit)
 
     l = sub.add_parser("list", help="lista eventos")
