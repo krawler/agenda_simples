@@ -191,7 +191,7 @@ def render_edit_form(e, occ, panel_date):
         current_status = "concluido"
     
     status_opts = ''.join([
-        f'<option value=""{" selected" if current_status == "" else ""}>Selecione um status</option>',
+        f'<option value=""{" selected" if current_status == "" else ""}>Status do evento</option>',
         f'<option value="concluido"{" selected" if current_status == "concluido" else ""}>Concluído</option>',
         f'<option value="cancelado"{" selected" if current_status == "cancelado" else ""}>Cancelado</option>'
     ])
@@ -216,35 +216,35 @@ def render_edit_form(e, occ, panel_date):
         data-balloon-content="Defina a hora de início"
         data-balloon-pos="right"
         data-balloon-class="balloon-dark">
-    </div>
-    <div class="flex gap-2">
       <input type="number" name="dur" min="1" value="{e.get('dur') or ''}"
         placeholder="min" class="input input-bordered input-sm w-24 duration-field" id="dur-edit-{e['id']}"
         data-balloon-content="Duração em minutos"
         data-balloon-pos="right"
         data-balloon-class="balloon-dark">
+    </div>
+    <div class="flex gap-2">
       <select name="repeat" class="select select-bordered select-sm flex-1"
         data-balloon-content="Tipo de repetição"
         data-balloon-pos="right"
         data-balloon-class="balloon-dark">{opts}</select>
+       <input type="date" name="until" value="{esc(e.get('until') or '')}"
+                title="repetir até" class="input input-bordered input-sm"
+                data-balloon-content="Data limite para repetição"
+                data-balloon-pos="right"
+                data-balloon-class="balloon-dark">
+        <select name="status" class="select select-bordered select-sm flex-1"
+              data-balloon-content="Status do evento"
+              data-balloon-pos="right"
+              data-balloon-class="balloon-dark">
+              {status_opts}
+            </select>  
     </div>
-    <input name="desc" value="{esc(e.get('desc') or '')}" placeholder="Descrição"
-      class="input input-bordered input-sm w-full"
-      data-balloon-content="Descrição opcional do evento"
-      data-balloon-pos="right"
-      data-balloon-class="balloon-dark">
-    <input type="date" name="until" value="{esc(e.get('until') or '')}"
-      title="repetir até" class="input input-bordered input-sm w-full"
-      data-balloon-content="Data limite para repetição"
-      data-balloon-pos="right"
-      data-balloon-class="balloon-dark">
     <div class="flex gap-2">
-      <select name="status" class="select select-bordered select-sm flex-1"
-        data-balloon-content="Status do evento"
-        data-balloon-pos="right"
-        data-balloon-class="balloon-dark">
-        {status_opts}
-      </select>
+      <input name="desc" value="{esc(e.get('desc') or '')}" placeholder="Descrição"
+            class="input input-bordered input-sm w-full"
+            data-balloon-content="Descrição opcional do evento"
+            data-balloon-pos="right"
+            data-balloon-class="balloon-dark">
     </div>
     <div class="flex gap-2">
       <button type="submit" class="btn btn-primary btn-sm flex-1">Salvar</button>
@@ -273,7 +273,7 @@ def render_day_panel(d, editando=None):
 
     # Opções de status para novo evento
     status_opts_novo = ''.join([
-        '<option value="">Selecione um status</option>',
+        '<option value="">Status do evento</option>',
         '<option value="concluido">Concluído</option>',
         '<option value="cancelado">Cancelado</option>'
     ])
@@ -317,20 +317,18 @@ def render_day_panel(d, editando=None):
         data-balloon-content="Data limite para repetição (opcional)"
         data-balloon-pos="right"
         data-balloon-class="balloon-dark">
+        <select name="status" class="select select-bordered select-sm flex-1"
+                data-balloon-content="Status do evento"
+                data-balloon-pos="right"
+                data-balloon-class="balloon-dark">
+                {status_opts_novo}
+              </select>
       </div>
       <input name="desc" placeholder="Descrição (opcional)"
         class="input input-bordered input-sm w-full"
         data-balloon-content="Descrição opcional do evento"
         data-balloon-pos="right"
         data-balloon-class="balloon-dark">
-      <div class="flex gap-2">
-        <select name="status" class="select select-bordered select-sm flex-1"
-          data-balloon-content="Status do evento"
-          data-balloon-pos="right"
-          data-balloon-class="balloon-dark">
-          {status_opts_novo}
-        </select>
-      </div>
       <button type="submit" class="btn btn-primary btn-sm w-full">Adicionar</button>
     </form>'''
 
