@@ -495,7 +495,7 @@ def _deduplicate_by_google_id(event_list):
     return unique
 
 
-def sync_all_to_google(on_progress=None):
+def sync_all_to_google(on_progress=None, simulate_error=False):
     """Sincroniza todos os eventos locais para o Google Calendar.
     Retorna: (eventos_exportados, erros)
     eventos_exportados = lista de dicts com info dos eventos NOVAMENTE CRIADOS no Google
@@ -546,6 +546,12 @@ def sync_all_to_google(on_progress=None):
         if inicio_dt < datetime.now() and not tem_ocorrencia_futura(e):
             continue
         
+        # Simulação de erro para teste
+        if simulate_error and e["id"] == 1: # Simula erro no primeiro evento
+            progress(f"  [SIMULAÇÃO] Erro ao sincronizar evento {e['id']}: Falha de rede simulada")
+            errors += 1
+            continue
+
         # Tenta sincronizar: se tem google_id e ele existe no Google, atualiza; senão cria novo
         success, action = sync_event_to_google(e)
         if success:
@@ -574,7 +580,7 @@ def sync_all_to_google(on_progress=None):
     return exportados, errors
 
 
-def sync_from_google(on_progress=None):
+def sync_from_google(on_progress=None, simulate_error=False):
     """Busca eventos do Google Calendar que não estão na agenda local e adiciona.
     Retorna: (eventos_importados, erros)
     eventos_importados = lista de eventos do Google que foram importados
@@ -611,6 +617,12 @@ def sync_from_google(on_progress=None):
         # Verifica se já existe localmente pelo google_id
         if gid in imported_google_ids:
             continue  # Já existe localmente (ou já foi processado neste loop)
+        
+        # Simulação de erro para teste
+        if simulate_error and gid.endswith('1'): # Simula erro em algum evento
+            progress(f"  [SIMULAÇÃO] Erro ao importar evento {gid}: Permissão negada simulada")
+            errors += 1
+            continue
         
         # Converte evento do Google para formato local
         start = ge['start'].get('dateTime', ge['start'].get('date'))
@@ -685,58 +697,63 @@ def sync_from_google(on_progress=None):
     return importados, errors
 
 
-def sync_all_with_progress(on_progress):
+def sync_all_with_progress(on_progress, simulate_error=False):
     """
     Sincroniza eventos com Google Calendar (bidirecional) e dispara callbacks de progresso.
-    Retorna: (status_msg, exportados, importados)
+    Retorna: (status_msg, exportados, importados, logs)
     """
     if not GOOGLE_AVAILABLE:
         if on_progress:
             on_progress("Bibliotecas do Google Calendar não instaladas.")
-        return "Bibliotecas do Google Calendar não instaladas.", [], []
+        return "Bibliotecas do Google Calendar não instaladas.", [], [], []
     
     if not GOOGLE_CREDENTIALS_FILE.exists():
         if on_progress:
             on_progress("Arquivo de credenciais não encontrado.")
-        return "Arquivo de credenciais não encontrado.", [], []
+        return "Arquivo de credenciais não encontrado.", [], [], []
+
+    logs = []
+    def capture_progress(msg):
+        logs.append(msg)
+        if on_progress:
+            on_progress(msg)
 
     if on_progress:
-        on_progress("Sincronizando com Google Calendar...")
+        capture_progress("Sincronizando com Google Calendar...")
 
     try:
-        exportados, export_errors = sync_all_to_google(on_progress=on_progress)
-        importados, import_errors = sync_from_google(on_progress=on_progress)
+        exportados, export_errors = sync_all_to_google(on_progress=capture_progress, simulate_error=simulate_error)
+        importados, import_errors = sync_from_google(on_progress=capture_progress, simulate_error=simulate_error)
         
         exportados = _deduplicate_by_google_id(exportados)
         importados = _deduplicate_by_google_id(importados)
         
         total_errors = export_errors + import_errors
         msg = "Sincronização concluída com sucesso!" if total_errors == 0 else f"Sincronização concluída com {total_errors} erro(s)."
-        if on_progress:
-            on_progress(msg)
-        return msg, exportados, importados
+        capture_progress(msg)
+        return msg, exportados, importados, logs
     except RefreshError as e:
         error_msg = "Não foi possível sincronizar, token de autenticação Google expirado"
-        if on_progress:
-            on_progress(error_msg)
+        capture_progress(error_msg)
         print(f"Erro de autenticação: {e}")
-        return error_msg, [], []
+        return error_msg, [], [], logs
 
 
-def sync_all_and_get_results():
+def sync_all_and_get_results(simulate_error=False):
     """
     Sincroniza eventos com Google Calendar (bidirecional) e retorna resultados detalhados.
-    Retorna: (status_msg, exportados, importados)
+    Retorna: (status_msg, exportados, importados, logs)
     - exportados: lista de eventos locais NOVAMENTE CRIADOS no Google
     - importados: lista de eventos do Google importados para o local
+    - logs: lista de mensagens de progresso capturadas
     """
     if not GOOGLE_AVAILABLE:
-        return "Bibliotecas do Google Calendar não instaladas.", [], []
+        return "Bibliotecas do Google Calendar não instaladas.", [], [], []
     
     if not GOOGLE_CREDENTIALS_FILE.exists():
-        return "Arquivo de credenciais não encontrado.", [], []
+        return "Arquivo de credenciais não encontrado.", [], [], []
     
-    return sync_all_with_progress(on_progress=print)
+    return sync_all_with_progress(on_progress=print, simulate_error=simulate_error)
 
 
 # -------------------------------------------------------------- status events
@@ -759,6 +776,32 @@ def marcar_eventos_passados_como_concluidos():
                 pass
     if alterado:
         salvar(eventos)
+
+
+# ------------------------------------------------------------------------ UI Helpers
+def print_popup_box(title, lines):
+    """Imprime uma caixa estilo pop-up no terminal com fundo preto e letras brancas (ANSI)."""
+    # Códigos ANSI: \033[40m = fundo preto, \033[37m = texto branco, \033[1m = negrito, \033[0m = reset
+    BG_BLACK = "\033[40m"
+    FG_WHITE = "\033[37m"
+    BOLD = "\033[1m"
+    RESET = "\033[0m"
+    
+    # Calcula largura da caixa
+    max_len = max(len(title), max((len(line) for line in lines), default=0))
+    width = max_len + 4  # padding
+    
+    # Topo
+    print(f"{BG_BLACK}{FG_WHITE}{BOLD}┌{'─' * width}┐{RESET}")
+    # Título
+    print(f"{BG_BLACK}{FG_WHITE}{BOLD}│ {title.ljust(width - 2)} │{RESET}")
+    # Separador
+    print(f"{BG_BLACK}{FG_WHITE}{BOLD}├{'─' * width}┤{RESET}")
+    # Linhas
+    for line in lines:
+        print(f"{BG_BLACK}{FG_WHITE}│ {line.ljust(width - 2)} │{RESET}")
+    # Base
+    print(f"{BG_BLACK}{FG_WHITE}{BOLD}└{'─' * width}┘{RESET}")
 
 
 # ------------------------------------------------------------------------ main
@@ -936,15 +979,46 @@ def cmd_sync(args):
     
     print("Sincronizando com Google Calendar...")
     
-    # Primeiro: envia eventos locais para o Google
-    print("Enviando eventos locais para Google Calendar...")
-    sync_all_to_google()
+    # Executa sincronização e captura logs
+    msg, exportados, importados, logs = sync_all_and_get_results(simulate_error=args.simulate_error)
     
-    # Segundo: busca eventos do Google que não estão na agenda local e adiciona.
-    print("Buscando eventos do Google Calendar não presentes localmente...")
-    sync_from_google()
+    print(msg)
     
-    print("Sincronização concluída.")
+    # Prepara linhas para o pop-up
+    popup_lines = []
+    export_section = False
+    import_section = False
+    
+    for log in logs:
+        if "Enviando eventos locais" in log:
+            export_section = True
+            import_section = False
+            popup_lines.append(">> EXPORTAÇÃO (Local → Google)")
+            continue
+        if "Buscando eventos do Google" in log:
+            export_section = False
+            import_section = True
+            popup_lines.append(">> IMPORTAÇÃO (Google → Local)")
+            continue
+        if "Exportação para Google concluída" in log or "eventos importados do Google" in log or "Nenhum evento novo para importar" in log:
+            popup_lines.append(f"   {log}")
+            continue
+        
+        if export_section or import_section:
+            popup_lines.append(f"   {log}")
+    
+    # Adiciona resumo final
+    popup_lines.append("")
+    popup_lines.append(f"Eventos exportados (criados): {len(exportados)}")
+    popup_lines.append(f"Eventos importados: {len(importados)}")
+    if args.simulate_error:
+        popup_lines.append("[MODO SIMULAÇÃO DE ERRO ATIVO]")
+    
+    # Exibe o pop-up
+    print()  # Espaço
+    print_popup_box("DETALHES DA SINCRONIZAÇÃO", popup_lines)
+    print()
+    print("Dica: Use 'python agenda.py sync --simulate-error' para testar exibição de erros.")
 
 
 # ------------------------------------------------------------------------ main
@@ -995,6 +1069,7 @@ def main():
     r.set_defaults(func=cmd_rm)
 
     s = sub.add_parser("sync", help="sincroniza eventos com Google Calendar")
+    s.add_argument("--simulate-error", action="store_true", help="Simula erros de sincronização para testar a exibição do pop-up")
     s.set_defaults(func=cmd_sync)
 
     args = p.parse_args()
