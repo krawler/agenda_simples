@@ -242,6 +242,7 @@ def render_edit_form(e, occ, panel_date):
                 data-balloon-pos="right"
                 data-balloon-class="balloon-dark">
         <select name="status" class="select select-bordered select-sm flex-1"
+              style="padding-right: 0.4rem;"
               data-balloon-content="Status do evento"
               data-balloon-pos="right"
               data-balloon-class="balloon-dark">
