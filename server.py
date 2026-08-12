@@ -143,6 +143,14 @@ def render_evento_item(occ, e):
     editar = (f'hx-get="/edit?id={e["id"]}&date={iso}" '
               f'hx-target="#day-panel"')
 
+    # Indicadores de status
+    status_indicador = ""
+    agora = datetime.now()
+    if e.get("cancelado"):
+        status_indicador = '<span class="text-red-400 font-medium">(evento cancelado)</span>'
+    elif e.get("concluido") and occ > agora:
+        status_indicador = '<span class="text-green-700 font-medium">(evento concluído)</span>'
+
     if e.get("repeat"):
         acoes = f'''<div class="dropdown dropdown-end">
       <button tabindex="0" class="btn btn-xs btn-ghost">⋯</button>
@@ -169,6 +177,7 @@ def render_evento_item(occ, e):
   </div>
   <div class="flex-1">
     <div class="font-medium flex items-center gap-2">{esc(e["titulo"])} {badges}{acoes}</div>
+    {status_indicador}
     {desc}
   </div>
 </li>'''
