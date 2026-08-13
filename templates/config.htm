@@ -55,9 +55,9 @@
           </select>
         </div>
         <div class="form-control w-full">
-          <label class="label cursor-pointer">
-            <input type="checkbox" class="checkbox checkbox-primary" id="semana-inicio-segunda">
+          <label class="label cursor-pointer flex items-center gap-2">
             <span class="label-text">Iniciar semana na Segunda-feira (padrão: Domingo)</span>
+            <input type="checkbox" class="checkbox checkbox-primary" id="semana-inicio-segunda">
           </label>
         </div>
       </div>
@@ -76,30 +76,34 @@
             <span class="label-text">Minutos de antecedência para alertas</span>
           </label>
           <div class="flex gap-2 flex-wrap">
-            <label class="label cursor-pointer">
-              <input type="checkbox" class="checkbox checkbox-primary" value="60" checked> 60 min
+            <label class="label cursor-pointer flex items-center gap-1">
+              <span class="label-text">60 min</span>
+              <input type="checkbox" class="checkbox checkbox-primary" value="60" checked>
             </label>
-            <label class="label cursor-pointer">
-              <input type="checkbox" class="checkbox checkbox-primary" value="30" checked> 30 min
+            <label class="label cursor-pointer flex items-center gap-1">
+              <span class="label-text">30 min</span>
+              <input type="checkbox" class="checkbox checkbox-primary" value="30" checked>
             </label>
-            <label class="label cursor-pointer">
-              <input type="checkbox" class="checkbox checkbox-primary" value="15" checked> 15 min
+            <label class="label cursor-pointer flex items-center gap-1">
+              <span class="label-text">15 min</span>
+              <input type="checkbox" class="checkbox checkbox-primary" value="15" checked>
             </label>
-            <label class="label cursor-pointer">
-              <input type="checkbox" class="checkbox checkbox-primary" value="5"> 5 min
+            <label class="label cursor-pointer flex items-center gap-1">
+              <span class="label-text">5 min</span>
+              <input type="checkbox" class="checkbox checkbox-primary" value="5">
             </label>
           </div>
         </div>
         <div class="form-control w-full">
-          <label class="label cursor-pointer">
-            <input type="checkbox" class="checkbox checkbox-primary" id="som-alertas" checked>
+          <label class="label cursor-pointer flex items-center gap-2">
             <span class="label-text">Emitir som (beep) nos alertas</span>
+            <input type="checkbox" class="checkbox checkbox-primary" id="som-alertas" checked>
           </label>
         </div>
         <div class="form-control w-full">
-          <label class="label cursor-pointer">
-            <input type="checkbox" class="checkbox checkbox-primary" id="notificacoes-navegador">
+          <label class="label cursor-pointer flex items-center gap-2">
             <span class="label-text">Notificações do navegador (requer permissão)</span>
+            <input type="checkbox" class="checkbox checkbox-primary" id="notificacoes-navegador">
           </label>
         </div>
       </div>
@@ -114,15 +118,15 @@
       </h3>
       <div class="space-y-4">
         <div class="form-control w-full">
-          <label class="label cursor-pointer">
-            <input type="checkbox" class="checkbox checkbox-primary" id="sync-auto" checked>
+          <label class="label cursor-pointer flex items-center gap-2">
             <span class="label-text">Sincronização automática ao iniciar</span>
+            <input type="checkbox" class="checkbox checkbox-primary" id="sync-auto" checked>
           </label>
         </div>
         <div class="form-control w-full">
-          <label class="label cursor-pointer">
-            <input type="checkbox" class="checkbox checkbox-primary" id="sync-bidirecional" checked>
+          <label class="label cursor-pointer flex items-center gap-2">
             <span class="label-text">Sincronização bidirecional (importar e exportar)</span>
+            <input type="checkbox" class="checkbox checkbox-primary" id="sync-bidirecional" checked>
           </label>
         </div>
         <div class="form-control w-full">
@@ -160,9 +164,9 @@
           </button>
         </div>
         <div class="form-control w-full">
-          <label class="label cursor-pointer">
-            <input type="checkbox" class="checkbox checkbox-primary" id="backup-auto" checked>
+          <label class="label cursor-pointer flex items-center gap-2">
             <span class="label-text">Backup automático diário</span>
+            <input type="checkbox" class="checkbox checkbox-primary" id="backup-auto" checked>
           </label>
         </div>
         <div class="text-sm opacity-70">
@@ -180,15 +184,15 @@
       </h3>
       <div class="space-y-4">
         <div class="form-control w-full">
-          <label class="label cursor-pointer">
-            <input type="checkbox" class="checkbox checkbox-primary" id="modo-debug">
+          <label class="label cursor-pointer flex items-center gap-2">
             <span class="label-text">Modo debug (logs detalhados no console)</span>
+            <input type="checkbox" class="checkbox checkbox-primary" id="modo-debug">
           </label>
         </div>
         <div class="form-control w-full">
-          <label class="label cursor-pointer">
-            <input type="checkbox" class="checkbox checkbox-primary" id="compactar-eventos">
+          <label class="label cursor-pointer flex items-center gap-2">
             <span class="label-text">Compactar visualização de eventos (menos espaçamento)</span>
+            <input type="checkbox" class="checkbox checkbox-primary" id="compactar-eventos">
           </label>
         </div>
         <div class="flex gap-2">
