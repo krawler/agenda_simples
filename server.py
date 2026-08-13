@@ -20,6 +20,7 @@ import threading
 from datetime import date, datetime, time, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
+from pathlib import Path
 
 import agenda  # reaproveita carregar/salvar/expandir/proximo_id/FMT/REPEATS/...
 
@@ -29,6 +30,9 @@ TEMAS = ["light", "dark", "cupcake", "corporate", "emerald", "synthwave",
 MESES = ["", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
            "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
 ANOS_DISPONIVEIS = [2025, 2026, 2027, 2028]
+
+# Caminho para templates
+TEMPLATES_DIR = Path(__file__).parent / "templates"
 
 
 # --------------------------------------------------------------- consultas dados
@@ -100,7 +104,7 @@ def render_calendar(ano, mes, sel):
 
 
 def render_controls(ano_atual=None):
-    """Renderiza os controles (tema, botões, seletor de ano) para ficar abaixo do calendário."""
+    """Renderiza os controles (botões, seletor de ano) para ficar abaixo do calendário."""
     if ano_atual is None:
         ano_atual = date.today().year
     
@@ -112,10 +116,6 @@ def render_controls(ano_atual=None):
     return f'''<div class="card bg-base-100 shadow-md p-4">
   <div class="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full">
     <div class="flex items-center gap-2 w-full sm:w-auto justify-start sm:justify-end">
-      <select id="tema" onchange="trocarTema(this.value)"
-        class="select select-bordered select-sm w-full sm:w-auto" title="Tema">
-        {"".join(f'<option value="{t}">{t}</option>' for t in TEMAS)}
-      </select>  
       <select id="ano-calendario" onchange="trocarAnoCalendario(this.value)"
         class="select select-bordered select-sm w-auto" title="Ano do calendário">
         {opts_ano}
@@ -123,6 +123,9 @@ def render_controls(ano_atual=None):
       <button class="btn btn-sm btn-primary" hx-get="/alerts" hx-target="#alerts-container"
         hx-swap="innerHTML">Próx. evento</button>
       <button id="sync-google" class="btn btn-sm btn-primary">☁ Sinc. Google </button>
+      <button class="btn btn-sm btn-secondary" onclick="abrirConfig()">
+        ⚙️ Configurações
+      </button>
     </div>
   </div>
 </div>'''
@@ -743,6 +746,14 @@ DURACAO_MODAL_JS = """
 """
 
 
+def load_config_template():
+    """Carrega o template de configuração do arquivo."""
+    template_path = TEMPLATES_DIR / "config.htm"
+    if template_path.exists():
+        return template_path.read_text(encoding="utf-8")
+    return "<div class='alert alert-error'>Template config.htm não encontrado</div>"
+
+
 def render_page(sel):
     calendar_html = render_calendar(sel.year, sel.month, sel)
     controls_html = render_controls(sel.year)
@@ -750,6 +761,7 @@ def render_page(sel):
     alerts_html = render_alerts_banner()
     proximos_html = render_proximos_eventos_dia(sel)
     sync_html = render_sync_status()
+    config_modal_html = load_config_template()
     
     return f'''<!DOCTYPE html>
 <html lang="pt-br" data-theme="light">
@@ -848,6 +860,14 @@ def render_page(sel):
           $('#' + targetId).hide();
         }}
       }});
+    }}
+    
+    // Abre modal de configurações
+    function abrirConfig() {{
+      const modal = document.getElementById('config-modal');
+      if (modal) {{
+        modal.showModal();
+      }}
     }}
     
     document.addEventListener("DOMContentLoaded", function () {{
@@ -1046,6 +1066,16 @@ def render_page(sel):
   <!-- Modal de detalhes da sincronização -->
   {SYNC_DETAILS_MODAL}
 
+  <!-- Modal de Configurações -->
+  <dialog id="config-modal" class="modal modal-bottom sm:modal-middle">
+    <div class="modal-box max-w-2xl max-h-[90vh] overflow-y-auto">
+      {config_modal_html}
+    </div>
+    <form method="dialog" class="modal-backdrop">
+      <button>Fechar</button>
+    </form>
+  </dialog>
+
   {DURACAO_MODAL_JS}
   {SYNC_MODAL_JS}
 </body>
@@ -1060,6 +1090,14 @@ class Handler(BaseHTTPRequestHandler):
         dados = corpo.encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(dados)))
+        self.end_headers()
+        self.wfile.write(dados)
+
+    def _send_json(self, data, status=200):
+        dados = json.dumps(data, ensure_ascii=False).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(dados)))
         self.end_headers()
         self.wfile.write(dados)
@@ -1111,8 +1149,13 @@ class Handler(BaseHTTPRequestHandler):
                 alerts_banner = render_alerts_banner()
                 proximos_eventos = render_proximos_eventos_dia(d)
                 self._send(alerts_banner + proximos_eventos)
+            case "/config":
+                # Retorna o template de configuração para carregar no modal
+                self._send(load_config_template())
             case "/sync-stream":
                 self._stream_sync_status()
+            case "/export":
+                self._exportar_eventos()
             case _:
                 self._send("<h1>404</h1>", 404)
 
@@ -1133,6 +1176,12 @@ class Handler(BaseHTTPRequestHandler):
             self._pular_ocorrencia(q)
         elif u.path == "/sync":
             self._sincronizar_google()
+        elif u.path == "/import":
+            self._importar_eventos(corpo)
+        elif u.path == "/sync-test":
+            self._testar_conexao_google()
+        elif u.path == "/google-reauth":
+            self._reautenticar_google()
         else:
             self._send("<h1>404</h1>", 404)
 
@@ -1274,6 +1323,72 @@ class Handler(BaseHTTPRequestHandler):
                                      google_events_importados=importados,
                                      google_events_exportados=exportados,
                                      sync_logs=logs))
+
+    def _testar_conexao_google(self):
+        """Testa a conexão com Google Calendar."""
+        try:
+            if not agenda.GOOGLE_AVAILABLE:
+                self._send_json({"ok": False, "msg": "Bibliotecas não instaladas"})
+                return
+            if not agenda.GOOGLE_CREDENTIALS_FILE.exists():
+                self._send_json({"ok": False, "msg": "credentials.json não encontrado"})
+                return
+            
+            service = agenda.get_google_service()
+            # Tenta listar calendários para testar
+            service.calendarList().list().execute()
+            self._send_json({"ok": True, "msg": "Conexão OK"})
+        except Exception as ex:
+            self._send_json({"ok": False, "msg": str(ex)})
+
+    def _reautenticar_google(self):
+        """Remove token e força reautenticação."""
+        try:
+            if agenda.GOOGLE_TOKEN_FILE.exists():
+                agenda.GOOGLE_TOKEN_FILE.unlink()
+            # Tenta obter novo serviço (vai abrir navegador)
+            service = agenda.get_google_service()
+            self._send_json({"ok": True, "msg": "Reautenticação iniciada"})
+        except Exception as ex:
+            self._send_json({"ok": False, "msg": str(ex)})
+
+    def _exportar_eventos(self):
+        """Exporta eventos para JSON."""
+        eventos = agenda.carregar()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Disposition", f'attachment; filename="eventos-backup-{date.today().isoformat()}.json"')
+        self.end_headers()
+        self.wfile.write(json.dumps(eventos, ensure_ascii=False, indent=2).encode("utf-8"))
+
+    def _importar_eventos(self, corpo):
+        """Importa eventos de JSON."""
+        try:
+            dados = json.loads(corpo)
+            if not isinstance(dados, list):
+                self._send_json({"ok": False, "msg": "Formato inválido: esperado array"})
+                return
+            
+            eventos_atuais = agenda.carregar()
+            max_id = max((e["id"] for e in eventos_atuais), default=0)
+            
+            count = 0
+            for ev in dados:
+                if "id" not in ev:
+                    continue
+                # Evita duplicatas por ID
+                if any(e["id"] == ev["id"] for e in eventos_atuais):
+                    continue
+                # Ajusta ID se necessário
+                if ev["id"] > max_id:
+                    max_id = ev["id"]
+                eventos_atuais.append(ev)
+                count += 1
+            
+            agenda.salvar(eventos_atuais)
+            self._send_json({"ok": True, "count": count})
+        except Exception as ex:
+            self._send_json({"ok": False, "msg": str(ex)})
 
     def _responder_com_calendario(self, painel):
         cal_html = render_calendar(painel.year, painel.month, painel)

@@ -1,0 +1,465 @@
+<div id="config-page" class="space-y-4">
+  <div class="flex items-center justify-between">
+    <h2 class="text-xl font-bold">⚙️ Configurações</h2>
+    <button type="button" class="btn btn-xs btn-ghost btn-circle close-btn" data-close-target="config-modal" title="Fechar">✕</button>
+  </div>
+
+  <div class="card bg-base-100 shadow-md p-4 space-y-6">
+    <!-- Seção: Aparência -->
+    <section>
+      <h3 class="text-lg font-semibold text-primary mb-4 flex items-center gap-2">
+        <span>🎨</span> Aparência
+      </h3>
+      <div class="space-y-4">
+        <div class="form-control w-full">
+          <label class="label">
+            <span class="label-text">Tema da interface</span>
+          </label>
+          <select id="tema" onchange="trocarTema(this.value)"
+            class="select select-bordered select-sm w-full max-w-xs"
+            title="Tema">
+            <option value="light">Light (Claro)</option>
+            <option value="dark">Dark (Escuro)</option>
+            <option value="cupcake">Cupcake</option>
+            <option value="corporate">Corporate</option>
+            <option value="emerald">Emerald</option>
+            <option value="synthwave">Synthwave</option>
+            <option value="dracula">Dracula</option>
+            <option value="night">Night</option>
+            <option value="coffee">Coffee</option>
+            <option value="winter">Winter</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <hr class="border-base-300">
+
+    <!-- Seção: Calendário -->
+    <section>
+      <h3 class="text-lg font-semibold text-primary mb-4 flex items-center gap-2">
+        <span>📅</span> Calendário
+      </h3>
+      <div class="space-y-4">
+        <div class="form-control w-full">
+          <label class="label">
+            <span class="label-text">Ano padrão do calendário</span>
+          </label>
+          <select id="ano-calendario" onchange="trocarAnoCalendario(this.value)"
+            class="select select-bordered select-sm w-full max-w-xs"
+            title="Ano do calendário">
+            <option value="2025">2025</option>
+            <option value="2026" selected>2026</option>
+            <option value="2027">2027</option>
+            <option value="2028">2028</option>
+          </select>
+        </div>
+        <div class="form-control w-full">
+          <label class="label cursor-pointer">
+            <input type="checkbox" class="checkbox checkbox-primary" id="semana-inicio-segunda">
+            <span class="label-text">Iniciar semana na Segunda-feira (padrão: Domingo)</span>
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <hr class="border-base-300">
+
+    <!-- Seção: Notificações -->
+    <section>
+      <h3 class="text-lg font-semibold text-primary mb-4 flex items-center gap-2">
+        <span>🔔</span> Notificações e Alertas
+      </h3>
+      <div class="space-y-4">
+        <div class="form-control w-full">
+          <label class="label">
+            <span class="label-text">Minutos de antecedência para alertas</span>
+          </label>
+          <div class="flex gap-2 flex-wrap">
+            <label class="label cursor-pointer">
+              <input type="checkbox" class="checkbox checkbox-primary" value="60" checked> 60 min
+            </label>
+            <label class="label cursor-pointer">
+              <input type="checkbox" class="checkbox checkbox-primary" value="30" checked> 30 min
+            </label>
+            <label class="label cursor-pointer">
+              <input type="checkbox" class="checkbox checkbox-primary" value="15" checked> 15 min
+            </label>
+            <label class="label cursor-pointer">
+              <input type="checkbox" class="checkbox checkbox-primary" value="5"> 5 min
+            </label>
+          </div>
+        </div>
+        <div class="form-control w-full">
+          <label class="label cursor-pointer">
+            <input type="checkbox" class="checkbox checkbox-primary" id="som-alertas" checked>
+            <span class="label-text">Emitir som (beep) nos alertas</span>
+          </label>
+        </div>
+        <div class="form-control w-full">
+          <label class="label cursor-pointer">
+            <input type="checkbox" class="checkbox checkbox-primary" id="notificacoes-navegador">
+            <span class="label-text">Notificações do navegador (requer permissão)</span>
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <hr class="border-base-300">
+
+    <!-- Seção: Google Calendar -->
+    <section>
+      <h3 class="text-lg font-semibold text-primary mb-4 flex items-center gap-2">
+        <span>☁️</span> Google Calendar
+      </h3>
+      <div class="space-y-4">
+        <div class="form-control w-full">
+          <label class="label cursor-pointer">
+            <input type="checkbox" class="checkbox checkbox-primary" id="sync-auto" checked>
+            <span class="label-text">Sincronização automática ao iniciar</span>
+          </label>
+        </div>
+        <div class="form-control w-full">
+          <label class="label cursor-pointer">
+            <input type="checkbox" class="checkbox checkbox-primary" id="sync-bidirecional" checked>
+            <span class="label-text">Sincronização bidirecional (importar e exportar)</span>
+          </label>
+        </div>
+        <div class="form-control w-full">
+          <label class="label">
+            <span class="label-text">Calendário Google (ID)</span>
+          </label>
+          <input type="text" id="google-calendar-id" value="primary" class="input input-bordered input-sm w-full max-w-md" placeholder="primary ou email do calendário">
+        </div>
+        <div class="flex gap-2">
+          <button class="btn btn-primary btn-sm" onclick="testarConexaoGoogle()">
+            Testar conexão
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="reautenticarGoogle()">
+            Reautenticar
+          </button>
+        </div>
+        <div id="google-status" class="text-sm opacity-70"></div>
+      </div>
+    </section>
+
+    <hr class="border-base-300">
+
+    <!-- Seção: Dados e Backup -->
+    <section>
+      <h3 class="text-lg font-semibold text-primary mb-4 flex items-center gap-2">
+        <span>💾</span> Dados e Backup
+      </h3>
+      <div class="space-y-4">
+        <div class="flex gap-2 flex-wrap">
+          <button class="btn btn-primary btn-sm" onclick="exportarDados()">
+            📤 Exportar eventos (JSON)
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="importarDados()">
+            📥 Importar eventos (JSON)
+          </button>
+        </div>
+        <div class="form-control w-full">
+          <label class="label cursor-pointer">
+            <input type="checkbox" class="checkbox checkbox-primary" id="backup-auto" checked>
+            <span class="label-text">Backup automático diário</span>
+          </label>
+        </div>
+        <div class="text-sm opacity-70">
+          Arquivo de dados: <code class="bg-base-200 px-1 rounded">eventos.json</code>
+        </div>
+      </div>
+    </section>
+
+    <hr class="border-base-300">
+
+    <!-- Seção: Avançado -->
+    <section>
+      <h3 class="text-lg font-semibold text-primary mb-4 flex items-center gap-2">
+        <span>🔧</span> Avançado
+      </h3>
+      <div class="space-y-4">
+        <div class="form-control w-full">
+          <label class="label cursor-pointer">
+            <input type="checkbox" class="checkbox checkbox-primary" id="modo-debug">
+            <span class="label-text">Modo debug (logs detalhados no console)</span>
+          </label>
+        </div>
+        <div class="form-control w-full">
+          <label class="label cursor-pointer">
+            <input type="checkbox" class="checkbox checkbox-primary" id="compactar-eventos">
+            <span class="label-text">Compactar visualização de eventos (menos espaçamento)</span>
+          </label>
+        </div>
+        <div class="flex gap-2">
+          <button class="btn btn-error btn-sm" onclick="limparCache()">
+            🗑 Limpar cache localStorage
+          </button>
+          <button class="btn btn-ghost btn-sm" onclick="resetarConfiguracoes()">
+            ↩️ Restaurar padrões
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Botões de ação -->
+    <div class="flex gap-2 justify-end pt-4 border-t border-base-300">
+      <button type="button" class="btn btn-ghost" onclick="fecharConfig()">Cancelar</button>
+      <button type="button" class="btn btn-primary" onclick="salvarConfig()">Salvar configurações</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Inicializa a página de configurações
+  document.addEventListener('DOMContentLoaded', function() {
+    carregarConfiguracoes();
+    initBalloons();
+  });
+
+  // Carrega configurações do localStorage
+  function carregarConfiguracoes() {
+    // Tema
+    const tema = localStorage.getItem('tema') || 'light';
+    document.getElementById('tema').value = tema;
+    
+    // Ano calendário
+    const ano = localStorage.getItem('anoCalendario') || new Date().getFullYear().toString();
+    document.getElementById('ano-calendario').value = ano;
+    
+    // Semana início segunda
+    document.getElementById('semana-inicio-segunda').checked = localStorage.getItem('semanaInicioSegunda') === 'true';
+    
+    // Alertas
+    const alertas = JSON.parse(localStorage.getItem('alertasMinutos') || '[60,30,15]');
+    document.querySelectorAll('input[type="checkbox"][value="60"], input[type="checkbox"][value="30"], input[type="checkbox"][value="15"], input[type="checkbox"][value="5"]').forEach(cb => {
+      cb.checked = alertas.includes(parseInt(cb.value));
+    });
+    
+    document.getElementById('som-alertas').checked = localStorage.getItem('somAlertas') !== 'false';
+    document.getElementById('notificacoes-navegador').checked = localStorage.getItem('notificacoesNavegador') === 'true';
+    
+    // Google Calendar
+    document.getElementById('sync-auto').checked = localStorage.getItem('syncAuto') !== 'false';
+    document.getElementById('sync-bidirecional').checked = localStorage.getItem('syncBidirecional') !== 'false';
+    document.getElementById('google-calendar-id').value = localStorage.getItem('googleCalendarId') || 'primary';
+    
+    // Backup
+    document.getElementById('backup-auto').checked = localStorage.getItem('backupAuto') !== 'false';
+    
+    // Avançado
+    document.getElementById('modo-debug').checked = localStorage.getItem('modoDebug') === 'true';
+    document.getElementById('compactar-eventos').checked = localStorage.getItem('compactarEventos') === 'true';
+  }
+
+  // Salva configurações no localStorage
+  function salvarConfig() {
+    // Tema
+    const tema = document.getElementById('tema').value;
+    localStorage.setItem('tema', tema);
+    document.documentElement.setAttribute('data-theme', tema);
+    
+    // Ano calendário
+    const ano = document.getElementById('ano-calendario').value;
+    localStorage.setItem('anoCalendario', ano);
+    trocarAnoCalendario(ano);
+    
+    // Semana início segunda
+    localStorage.setItem('semanaInicioSegunda', document.getElementById('semana-inicio-segunda').checked);
+    
+    // Alertas
+    const alertas = [];
+    document.querySelectorAll('input[type="checkbox"][value="60"], input[type="checkbox"][value="30"], input[type="checkbox"][value="15"], input[type="checkbox"][value="5"]').forEach(cb => {
+      if (cb.checked) alertas.push(parseInt(cb.value));
+    });
+    localStorage.setItem('alertasMinutos', JSON.stringify(alertas));
+    
+    localStorage.setItem('somAlertas', document.getElementById('som-alertas').checked);
+    localStorage.setItem('notificacoesNavegador', document.getElementById('notificacoes-navegador').checked);
+    
+    // Google Calendar
+    localStorage.setItem('syncAuto', document.getElementById('sync-auto').checked);
+    localStorage.setItem('syncBidirecional', document.getElementById('sync-bidirecional').checked);
+    localStorage.setItem('googleCalendarId', document.getElementById('google-calendar-id').value);
+    
+    // Backup
+    localStorage.setItem('backupAuto', document.getElementById('backup-auto').checked);
+    
+    // Avançado
+    localStorage.setItem('modoDebug', document.getElementById('modo-debug').checked);
+    localStorage.setItem('compactarEventos', document.getElementById('compactar-eventos').checked);
+    
+    // Feedback visual
+    const btn = document.querySelector('button[onclick="salvarConfig()"]');
+    const originalText = btn.textContent;
+    btn.textContent = '✓ Salvo!';
+    btn.classList.add('btn-success');
+    btn.classList.remove('btn-primary');
+    setTimeout(() => {
+      btn.textContent = originalText;
+      btn.classList.add('btn-primary');
+      btn.classList.remove('btn-success');
+      fecharConfig();
+    }, 1500);
+  }
+
+  function fecharConfig() {
+    const modal = document.getElementById('config-modal');
+    if (modal) modal.close();
+  }
+
+  function trocarTema(v) {
+    document.documentElement.setAttribute('data-theme', v);
+    localStorage.setItem('tema', v);
+    // Atualiza o select se estiver na página principal
+    const selectTema = document.getElementById('tema');
+    if (selectTema && selectTema !== event.target) {
+      selectTema.value = v;
+    }
+  }
+
+  function trocarAnoCalendario(ano) {
+    var cal = document.getElementById("calendar");
+    if (!cal) return;
+    var mes = parseInt(cal.dataset.mes, 10) || (new Date().getMonth() + 1);
+    var sel = cal.dataset.sel || new Date().toISOString().slice(0, 10);
+    var url = "/calendar?year=" + encodeURIComponent(ano) +
+              "&month=" + encodeURIComponent(mes) +
+              "&sel=" + encodeURIComponent(sel);
+    htmx.ajax("GET", url, {target: "#calendar", swap: "outerHTML"});
+  }
+
+  function testarConexaoGoogle() {
+    const status = document.getElementById('google-status');
+    status.textContent = 'Testando conexão...';
+    status.className = 'text-sm opacity-70';
+    
+    fetch('/sync-test', {method: 'POST'})
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) {
+          status.textContent = '✅ Conexão OK - ' + data.msg;
+          status.className = 'text-sm text-success';
+        } else {
+          status.textContent = '❌ Erro: ' + data.msg;
+          status.className = 'text-sm text-error';
+        }
+      })
+      .catch(err => {
+        status.textContent = '❌ Erro de rede: ' + err.message;
+        status.className = 'text-sm text-error';
+      });
+  }
+
+  function reautenticarGoogle() {
+    if (confirm('Isso removerá o token salvo e abrirá o navegador para nova autenticação. Continuar?')) {
+      fetch('/google-reauth', {method: 'POST'})
+        .then(r => r.json())
+        .then(data => {
+          const status = document.getElementById('google-status');
+          if (data.ok) {
+            status.textContent = '✅ Reautenticação iniciada - verifique o navegador';
+            status.className = 'text-sm text-success';
+          } else {
+            status.textContent = '❌ Erro: ' + data.msg;
+            status.className = 'text-sm text-error';
+          }
+        });
+    }
+  }
+
+  function exportarDados() {
+    fetch('/export')
+      .then(r => r.blob())
+      .then(blob => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'eventos-backup-' + new Date().toISOString().slice(0,10) + '.json';
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+  }
+
+  function importarDados() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = evt => {
+        try {
+          const dados = JSON.parse(evt.target.result);
+          fetch('/import', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(dados)
+          }).then(r => r.json()).then(data => {
+            if (data.ok) {
+              alert('Importado com sucesso: ' + data.count + ' eventos');
+              location.reload();
+            } else {
+              alert('Erro: ' + data.msg);
+            }
+          });
+        } catch (ex) {
+          alert('Arquivo JSON inválido');
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  }
+
+  function limparCache() {
+    if (confirm('Limpar todo o localStorage (tema, configurações, cache)?')) {
+      localStorage.clear();
+      alert('Cache limpo. Recarregue a página.');
+    }
+  }
+
+  function resetarConfiguracoes() {
+    if (confirm('Restaurar todas as configurações para os valores padrão?')) {
+      localStorage.removeItem('tema');
+      localStorage.removeItem('anoCalendario');
+      localStorage.removeItem('semanaInicioSegunda');
+      localStorage.removeItem('alertasMinutos');
+      localStorage.removeItem('somAlertas');
+      localStorage.removeItem('notificacoesNavegador');
+      localStorage.removeItem('syncAuto');
+      localStorage.removeItem('syncBidirecional');
+      localStorage.removeItem('googleCalendarId');
+      localStorage.removeItem('backupAuto');
+      localStorage.removeItem('modoDebug');
+      localStorage.removeItem('compactarEventos');
+      carregarConfiguracoes();
+      document.documentElement.setAttribute('data-theme', 'light');
+      trocarAnoCalendario(new Date().getFullYear().toString());
+    }
+  }
+
+  // Inicializa balões de dica
+  function initBalloons() {
+    if (typeof $ !== 'undefined' && $.fn.balloon) {
+      $("[data-balloon-content]").each(function() {
+        var $el = $(this);
+        if ($el.data("balloon-initialized")) return;
+        var balloonContent = $el.data("balloon-content") || $el.attr("title") || $el.attr("aria-label");
+        if (!balloonContent) return;
+        $el.data("balloon-initialized", true);
+        $el.balloon({
+          contents: balloonContent,
+          position: $el.data("balloon-pos") || "right",
+          classname: $el.data("balloon-class") || "balloon-dark",
+          offsetX: 10, offsetY: 0, tipSize: 8,
+          showDuration: 120, hideDuration: 100,
+          css: {borderRadius: "6px"}
+        });
+        $el.on("focus", function() { $el.showBalloon(); });
+        $el.on("blur", function() { $el.hideBalloon(); });
+      });
+    }
+  }
+</script>
