@@ -1025,12 +1025,14 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(dados)
 
     def _write_sse(self, data):
-        chunk = f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+      chunk = f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+      try:
         self.wfile.write(chunk.encode("utf-8"))
-        try:
-            self.wfile.flush()
-        except Exception:
-            pass
+        self.wfile.flush()
+        return True
+      except Exception:
+        # Cliente fechou a conexão ou erro de socket; interrompe envio
+        return False
 
     def _parse_date(self, texto, padrao=None):
         try:
@@ -1113,20 +1115,22 @@ class Handler(BaseHTTPRequestHandler):
             })
 
         try:
-            msg, exportados, importados, sync_logs = agenda.sync_all_with_progress(on_progress=on_progress)
-            self._write_sse({
-                "status": msg,
-                "completed": True,
-                "exportados": exportados,
-                "importados": importados,
-                "logs": sync_logs
-            })
+          msg, exportados, importados, sync_logs = agenda.sync_all_with_progress(on_progress=on_progress)
+          ok = self._write_sse({
+            "status": msg,
+            "completed": True,
+            "exportados": exportados,
+            "importados": importados,
+            "logs": sync_logs
+          })
+          if not ok:
+            return
         except Exception as ex:
-            self._write_sse({
-                "status": f"Erro ao sincronizar: {ex}",
-                "completed": True,
-                "logs": logs
-            })
+          self._write_sse({
+            "status": f"Erro ao sincronizar: {ex}",
+            "completed": True,
+            "logs": logs
+          })
 
     def _criar_evento(self, form):
         d = self._parse_date(form.get("date"))
