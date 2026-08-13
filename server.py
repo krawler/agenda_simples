@@ -352,32 +352,63 @@ def render_day_panel(d, editando=None):
 
 
 def render_proximos_eventos_dia(d):
-    """Renderiza lista dos próximos eventos do dia com fundo amarelo (warning)."""
-    itens = agenda.proximos_eventos_dia(d)
-    if not itens:
-        return ('<div id="proximos-eventos" class="alert alert-warning shadow-sm">'
-                '<div class="flex items-center gap-2">'
-                '<span class="opacity-50">Nenhum evento futuro para hoje.</span>'
-                '</div>'
-                '<button type="button" class="btn btn-xs btn-ghost btn-circle close-btn" data-close-target="proximos-eventos" title="Fechar">✕</button>'
-                '</div>')
+    """Renderiza lista dos próximos eventos do dia com fundo amarelo (warning).
+    Se não houver eventos futuros para hoje, mostra os eventos de amanhã."""
+    hoje = date.today()
+    itens_hoje = agenda.proximos_eventos_dia(d)
     
-    linhas = "".join(
-        f'<div class="flex items-center gap-2 p-1">'
-        f'<span class="badge badge-primary gap-1">{esc(e["titulo"])}</span>'
-        f'<span class="text-xs opacity-70">({occ:%H:%M})</span>'
-        f'</div>'
-        for occ, e in itens)
+    # Se há eventos para hoje (ou para o dia selecionado), mostra apenas eles
+    if itens_hoje:
+        linhas = "".join(
+            f'<div class="flex items-center gap-2 p-1">'
+            f'<span class="badge badge-primary gap-1">{esc(e["titulo"])}</span>'
+            f'<span class="text-xs opacity-70">({occ:%H:%M})</span>'
+            f'</div>'
+            for occ, e in itens_hoje)
+        
+        label = "hoje" if d == hoje else f"{d:%d/%m/%Y}"
+        return f'''<div id="proximos-eventos" class="alert alert-warning shadow-sm my-4">
+                    <div class="flex items-center justify-between mb-2">
+                      <span class="font-semibold">Próximos eventos de {label} ({len(itens_hoje)}):</span>
+                    </div>
+                    <div class="space-y-1 max-h-60 overflow-y-auto">
+                      {linhas}
+                    </div>
+                    <button type="button" class="btn btn-xs btn-ghost btn-circle close-btn" data-close-target="proximos-eventos" title="Fechar">✕</button>
+                  </div>'''
     
-    return f'''<div id="proximos-eventos" class="alert alert-warning shadow-sm my-4">
-                <div class="flex items-center justify-between mb-2">
-                  <span class="font-semibold">Próximos eventos de hoje ({len(itens)}):</span>
-                </div>
-                <div class="space-y-1 max-h-60 overflow-y-auto">
-                  {linhas}
-                </div>
-                <button type="button" class="btn btn-xs btn-ghost btn-circle close-btn" data-close-target="proximos-eventos" title="Fechar">✕</button>
-              </div>'''
+    # Se não há eventos para hoje, mostra mensagem e eventos de amanhã (se houver)
+    # Só faz isso se o dia selecionado for hoje
+    html_hoje = ('<div class="alert alert-warning shadow-sm my-4">'
+                 '<div class="flex items-center justify-between mb-2">'
+                 '<span class="font-semibold">Próximos eventos de hoje:</span>'
+                 '</div>'
+                 '<div class="flex items-center gap-2">'
+                 '<span class="opacity-50">Nenhum evento futuro para hoje.</span>'
+                 '</div>')
+    
+    html_amanha = ''
+    if d == hoje:
+        amanha = d + timedelta(days=1)
+        itens_amanha = agenda.proximos_eventos_dia(amanha)
+        if itens_amanha:
+            linhas_amanha = "".join(
+                f'<div class="flex items-center gap-2 p-1">'
+                f'<span class="badge badge-info gap-1">{esc(e["titulo"])}</span>'
+                f'<span class="text-xs opacity-70">({occ:%H:%M})</span>'
+                f'</div>'
+                for occ, e in itens_amanha)
+            
+            html_amanha = f'''
+                 <div class="divider my-2">Amanhã ({amanha:%d/%m/%Y})</div>
+                 <div class="space-y-1 max-h-60 overflow-y-auto">
+                   {linhas_amanha}
+                 </div>'''
+    
+    html_fechar = '<button type="button" class="btn btn-xs btn-ghost btn-circle close-btn" data-close-target="proximos-eventos" title="Fechar">✕</button>'
+    html_fim = '</div>'
+    
+    return html_hoje + html_amanha + html_fechar + html_fim
 
 
 def render_alerts_banner():
@@ -1025,14 +1056,12 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(dados)
 
     def _write_sse(self, data):
-      chunk = f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
-      try:
+        chunk = f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
         self.wfile.write(chunk.encode("utf-8"))
-        self.wfile.flush()
-        return True
-      except Exception:
-        # Cliente fechou a conexão ou erro de socket; interrompe envio
-        return False
+        try:
+            self.wfile.flush()
+        except Exception:
+            pass
 
     def _parse_date(self, texto, padrao=None):
         try:
@@ -1115,22 +1144,20 @@ class Handler(BaseHTTPRequestHandler):
             })
 
         try:
-          msg, exportados, importados, sync_logs = agenda.sync_all_with_progress(on_progress=on_progress)
-          ok = self._write_sse({
-            "status": msg,
-            "completed": True,
-            "exportados": exportados,
-            "importados": importados,
-            "logs": sync_logs
-          })
-          if not ok:
-            return
+            msg, exportados, importados, sync_logs = agenda.sync_all_with_progress(on_progress=on_progress)
+            self._write_sse({
+                "status": msg,
+                "completed": True,
+                "exportados": exportados,
+                "importados": importados,
+                "logs": sync_logs
+            })
         except Exception as ex:
-          self._write_sse({
-            "status": f"Erro ao sincronizar: {ex}",
-            "completed": True,
-            "logs": logs
-          })
+            self._write_sse({
+                "status": f"Erro ao sincronizar: {ex}",
+                "completed": True,
+                "logs": logs
+            })
 
     def _criar_evento(self, form):
         d = self._parse_date(form.get("date"))
