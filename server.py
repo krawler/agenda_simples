@@ -509,7 +509,7 @@ def render_google_events_list(google_events, mode="importados"):
               </div>'''
 
 
-def render_sync_status(status_msg="", detail_msg="", is_loading=False, auto_hide=False, google_events_importados=None, google_events_exportados=None):
+def render_sync_status(status_msg="", detail_msg="", is_loading=False, auto_hide=False, google_events_importados=None, google_events_exportados=None, sync_logs=None):
     """Renderiza o status da sincronização e os dois quadros de eventos."""
     if is_loading:
         return f'''<div id="sync-status" class="alert alert-info shadow-sm mt-4">
@@ -535,11 +535,19 @@ def render_sync_status(status_msg="", detail_msg="", is_loading=False, auto_hide
                 document.getElementById('sync-status').style.display = 'none';
               }, 3000);
             </script>'''
+        
+        # Link para abrir o modal de detalhes
+        details_link = ""
+        if sync_logs:
+            details_link = f'''<a href="#" class="link link-hover text-xs ml-2" onclick="openSyncDetailsModal(); return false;">Exibir detalhes</a>'''
+        
         html_output.append(f'''<div id="sync-status" class="alert {alert_class} shadow-sm mt-4">
           <div class="flex flex-col gap-3 p-4">
-            <span class="text-lg font-semibold">Status da sincronização</span>
-            <span id="sync-status-detail" class="text-sm opacity-70">{esc(status_msg)} {esc(detail_msg)}</span>
-            <button type="button" class="btn btn-xs btn-ghost btn-circle close-btn" data-close-target="sync-status" title="Fechar">✕</button>
+            <div class="flex items-center justify-between">
+              <span class="text-lg font-semibold">Status da sincronização</span>
+              <button type="button" class="btn btn-xs btn-ghost btn-circle close-btn" data-close-target="sync-status" title="Fechar">✕</button>
+            </div>
+            <span id="sync-status-detail" class="text-sm opacity-70">{esc(status_msg)} {esc(detail_msg)}{details_link}</span>
           </div>
         </div>{auto_hide_script}''')
     else:
@@ -555,11 +563,85 @@ def render_sync_status(status_msg="", detail_msg="", is_loading=False, auto_hide
     return "".join(html_output)
 
 
-# JavaScript do modal de duração - definido como string separada para evitar problemas com f-string
-DURACAO_MODAL_JS = """
+# Modal de detalhes da sincronização (DaisyUI)
+SYNC_DETAILS_MODAL = '''
+  <dialog id="sync-details-modal" class="modal modal-bottom sm:modal-middle">
+    <div class="modal-box max-w-2xl">
+      <h3 class="font-bold text-lg mb-4">Detalhes da Sincronização</h3>
+      <div id="sync-details-content" class="max-h-96 overflow-y-auto space-y-2 text-sm">
+        <!-- Conteúdo preenchido via JS -->
+      </div>
+      <div class="modal-action mt-4">
+        <form method="dialog">
+          <button class="btn btn-primary">Fechar</button>
+        </form>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+      <button>Fechar</button>
+    </form>
+  </dialog>
+'''
+
+# JavaScript para o modal de detalhes da sincronização
+SYNC_MODAL_JS = """
   <script>
-    // Variável para guardar o formulário que disparou o modal...
-    // (conteúdo completo omitido para brevidade)
+    // Dados globais dos logs de sincronização (preenchidos pelo servidor)
+    window.syncLogsData = [];
+
+    function openSyncDetailsModal() {
+      const modal = document.getElementById('sync-details-modal');
+      const content = document.getElementById('sync-details-content');
+      
+      if (!modal || !content) return;
+      
+      // Renderiza os logs
+      if (window.syncLogsData && window.syncLogsData.length > 0) {
+        let html = '';
+        let currentSection = '';
+        
+        window.syncLogsData.forEach(log => {
+          // Detecta seções
+          if (log.includes('EXPORTAÇÃO') || log.includes('Enviando eventos locais')) {
+            currentSection = 'export';
+            html += '<div class="font-semibold text-primary mb-1">>> EXPORTAÇÃO (Local → Google)</div>';
+          } else if (log.includes('IMPORTAÇÃO') || log.includes('Buscando eventos do Google')) {
+            currentSection = 'import';
+            html += '<div class="font-semibold text-info mb-1">>> IMPORTAÇÃO (Google → Local)</div>';
+          } else if (log.includes('Exportação para Google concluída') || 
+                     log.includes('eventos importados do Google') || 
+                     log.includes('Nenhum evento novo para importar')) {
+            html += `<div class="text-success text-xs ml-2">${escapeHtml(log)}</div>`;
+          } else if (log.includes('SIMULAÇÃO') || log.includes('Erro') || log.includes('erro')) {
+            html += `<div class="text-error text-xs ml-2 font-medium">${escapeHtml(log)}</div>`;
+          } else if (log.trim()) {
+            html += `<div class="text-xs opacity-70 ml-2">${escapeHtml(log)}</div>`;
+          }
+        });
+        
+        content.innerHTML = html;
+      } else {
+        content.innerHTML = '<div class="text-center opacity-50 py-4">Nenhum detalhe disponível.</div>';
+      }
+      
+      modal.showModal();
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Fecha modal com ESC
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        const modal = document.getElementById('sync-details-modal');
+        if (modal && modal.open) {
+          modal.close();
+        }
+      }
+    });
   </script>
 """
 
@@ -723,6 +805,11 @@ def render_page(sel):
           }}
 
           if (data.completed) {{
+            // Armazena logs para o modal
+            if (data.logs) {{
+              window.syncLogsData = data.logs;
+            }}
+            
             if (data.importados || data.exportados) {{
               var listsHtml = '';
               if (data.importados && data.importados.length) {{
@@ -858,7 +945,11 @@ def render_page(sel):
     </form>
   </dialog>
 
+  <!-- Modal de detalhes da sincronização -->
+  {SYNC_DETAILS_MODAL}
+
   {DURACAO_MODAL_JS}
+  {SYNC_MODAL_JS}
 </body>
 </html>'''
 
@@ -954,24 +1045,29 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Connection", "keep-alive")
         self.end_headers()
 
+        logs = []
         def on_progress(msg):
+            logs.append(msg)
             self._write_sse({
                 "status": msg,
-                "completed": False
+                "completed": False,
+                "logs": logs  # Envia logs acumulados a cada update
             })
 
         try:
-            msg, exportados, importados = agenda.sync_all_with_progress(on_progress=on_progress)
+            msg, exportados, importados, sync_logs = agenda.sync_all_with_progress(on_progress=on_progress)
             self._write_sse({
                 "status": msg,
                 "completed": True,
                 "exportados": exportados,
-                "importados": importados
+                "importados": importados,
+                "logs": sync_logs
             })
         except Exception as ex:
             self._write_sse({
                 "status": f"Erro ao sincronizar: {ex}",
-                "completed": True
+                "completed": True,
+                "logs": logs
             })
 
     def _criar_evento(self, form):
@@ -1073,12 +1169,13 @@ class Handler(BaseHTTPRequestHandler):
             return
         
         # Executa a sincronização bidirecional e obtém os resultados detalhados
-        msg, exportados, importados = agenda.sync_all_and_get_results()
+        msg, exportados, importados, logs = agenda.sync_all_and_get_results()
         
         # Envia resposta com os dois painéis
         self._send(render_sync_status(msg, is_loading=False, auto_hide=True, 
                                      google_events_importados=importados,
-                                     google_events_exportados=exportados))
+                                     google_events_exportados=exportados,
+                                     sync_logs=logs))
 
     def _responder_com_calendario(self, painel):
         cal_html = render_calendar(painel.year, painel.month, painel)
@@ -1093,7 +1190,7 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     p = argparse.ArgumentParser(description="Servidor web da agenda simples.")
     p.add_argument("--port", type=int, default=8000)
-    p.add_argument("--host", default="127.0.0-1",
+    p.add_argument("--host", default="127.0.0.1",
                    help="Endereço de escuta. Use 0.0.0.0 para aceitar conexões externas.")
     args = p.parse_args()
     try:
