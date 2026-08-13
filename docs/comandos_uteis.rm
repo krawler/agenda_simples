@@ -1,0 +1,4 @@
+pip install playwright
+python -m playwright install
+python scripts/test_sync_popup_playwright.py --headful --out-dir scripts/test_output_headful
+python scripts/test_sync_popup_playwright.py --out-dir scripts/test_output_headless
