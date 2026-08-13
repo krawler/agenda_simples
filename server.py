@@ -570,7 +570,7 @@ def render_sync_status(status_msg="", detail_msg="", is_loading=False, auto_hide
         # Link para abrir o modal de detalhes
         details_link = ""
         if sync_logs:
-            details_link = f'''<a href="#" class="link link-hover text-xs ml-2" onclick="openSyncDetailsModal(); return false;">Exibir detalhes</a>'''
+            details_link = f'''<a href="#" class="link link-hover text-xs ml-2" onclick="openSyncDetailsModal(); return false;">Exibir</a>'''
         
         html_output.append(f'''<div id="sync-status" class="alert {alert_class} shadow-sm mt-4">
           <div class="flex flex-col gap-3 p-4">
@@ -581,6 +581,14 @@ def render_sync_status(status_msg="", detail_msg="", is_loading=False, auto_hide
             <span id="sync-status-detail" class="text-sm opacity-70">{esc(status_msg)} {esc(detail_msg)}{details_link}</span>
           </div>
         </div>{auto_hide_script}''')
+
+        # Injetar logs no cliente para que o modal possa exibir detalhes (quando renderizado server-side)
+        if sync_logs:
+            try:
+                logs_json = json.dumps(sync_logs, ensure_ascii=False)
+            except Exception:
+                logs_json = '[]'
+            html_output.append(f"<script>window.syncLogsData = {logs_json};</script>")
     else:
         html_output.append('<div id="sync-status" style="display:none;"></div>')
 
@@ -597,9 +605,9 @@ def render_sync_status(status_msg="", detail_msg="", is_loading=False, auto_hide
 # Modal de detalhes da sincronização (DaisyUI)
 SYNC_DETAILS_MODAL = '''
   <dialog id="sync-details-modal" class="modal modal-bottom sm:modal-middle">
-    <div class="modal-box max-w-2xl">
+    <div class="modal-box max-w-2xl" style="background-color:#0b0b0b; color:#ffffff;">
       <h3 class="font-bold text-lg mb-4">Detalhes da Sincronização</h3>
-      <div id="sync-details-content" class="max-h-96 overflow-y-auto space-y-2 text-sm">
+      <div id="sync-details-content" class="max-h-96 overflow-y-auto space-y-2 text-sm" style="color:#ffffff;">
         <!-- Conteúdo preenchido via JS -->
       </div>
       <div class="modal-action mt-4">
@@ -882,10 +890,11 @@ def render_page(sel):
                 ? 'alert alert-error shadow-sm'
                 : 'alert alert-info shadow-sm';
 
+            var detailsLinkHtml = (data.logs && data.logs.length) ? ' <a href="#" class="link link-hover text-xs ml-2" onclick="openSyncDetailsModal(); return false;">Exibir</a>' : '';
             var html = '<div class="flex flex-col gap-2">'
               + '<span class="text-lg font-semibold">Sincronizando com Google Calendar...</span>'
               + ' <div class="space-y-1 max-h-60 overflow-y-auto">'
-              + '   <span id="sync-status-detail" class="text-sm opacity-70">' + data.status + '</span>'
+              + '   <span id="sync-status-detail" class="text-sm opacity-70">' + data.status + detailsLinkHtml + '</span>'
               + ' </div>'
               + ' <button type="button" class="btn btn-xs btn-ghost btn-circle close-btn" data-close-target="sync-status" title="Fechar">✕</button>'
               + '</div>'
