@@ -645,6 +645,64 @@ SYNC_MODAL_JS = """
   </script>
 """
 
+# JavaScript para o modal de confirmação de duração
+DURACAO_MODAL_JS = """
+  <script>
+    // Modal de confirmação para duração vazia
+    document.addEventListener('DOMContentLoaded', function() {
+      const forms = document.querySelectorAll('form[data-duration-confirm]');
+      
+      forms.forEach(form => {
+        form.addEventListener('submit', function(e) {
+          const durInput = form.querySelector('input[name="dur"]');
+          if (durInput && !durInput.value.trim()) {
+            e.preventDefault();
+            const modal = document.getElementById('duracao-modal');
+            if (modal) {
+              // Armazena o formulário para submissão posterior
+              modal.dataset.pendingForm = form.id || 'unknown';
+              // Adiciona ID único se não tiver
+              if (!form.id) {
+                form.id = 'form-' + Date.now();
+                modal.dataset.pendingForm = form.id;
+              }
+              modal.showModal();
+            }
+          }
+        });
+      });
+      
+      // Botão "Sim" - submete o formulário sem duração
+      const btnSim = document.getElementById('btn-duracao-sim');
+      if (btnSim) {
+        btnSim.addEventListener('click', function() {
+          const modal = document.getElementById('duracao-modal');
+          if (modal && modal.dataset.pendingForm) {
+            const form = document.getElementById(modal.dataset.pendingForm);
+            if (form) {
+              // Remove a validação de duração e submete
+              form.removeAttribute('data-duration-confirm');
+              form.submit();
+            }
+          }
+          modal.close();
+        });
+      }
+      
+      // Botão "Não" - apenas fecha o modal
+      const btnNao = document.getElementById('btn-duracao-nao');
+      if (btnNao) {
+        btnNao.addEventListener('click', function() {
+          const modal = document.getElementById('duracao-modal');
+          if (modal) {
+            modal.close();
+          }
+        });
+      }
+    });
+  </script>
+"""
+
 
 def render_page(sel):
     calendar_html = render_calendar(sel.year, sel.month, sel)
