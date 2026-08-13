@@ -8,8 +8,24 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 import agenda
+import subprocess
+import argparse
 
 print("Starting live sync diagnostic for recurring events")
+
+# Allow running the Playwright e2e test via --run-playwright
+parser = argparse.ArgumentParser(description="Run live sync diagnostics or e2e popup test")
+parser.add_argument("--run-playwright", action="store_true", help="Run the Playwright popup E2E test (headless)")
+args = parser.parse_args()
+
+if args.run_playwright:
+    test_script = Path(__file__).resolve().parent / "test_sync_popup_playwright.py"
+    if not test_script.exists():
+        print(f"Test script not found: {test_script}")
+        raise SystemExit(1)
+    print("Running Playwright E2E test (headless)...")
+    subprocess.check_call([sys.executable, str(test_script)])
+    raise SystemExit(0)
 
 # Diagnostic: list recurring events and google_id state
 recurring = [e for e in agenda.carregar() if e.get("repeat")]

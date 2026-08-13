@@ -1,0 +1,512 @@
+<!DOCTYPE html><html lang="pt-br" data-theme="light"><head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agenda Simples</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" rel="stylesheet">
+  <style>
+    .balloon-dark {
+      background-color: rgba(17, 24, 39, 0.96);
+      color: #f8fafc;
+      border: 1px solid rgba(148, 163, 184, 0.24);
+      box-shadow: 0 12px 32px rgba(15, 23, 42, 0.28);
+      border-radius: 0.5rem;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.92rem;
+      line-height: 1.3;
+      max-width: 240px;
+      word-break: break-word;
+    }
+  </style>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/urin/jquery.balloon.js/jquery.balloon.min.js"></script>
+  <script>
+    (function () {
+      var t = localStorage.getItem("tema");
+      if (t) document.documentElement.setAttribute("data-theme", t);
+    })();
+    function trocarTema(v) {
+      document.documentElement.setAttribute("data-theme", v);
+      localStorage.setItem("tema", v);
+    }
+
+    function trocarAnoCalendario(ano) {
+      var cal = document.getElementById("calendar");
+      if (!cal) {
+        console.warn("Calendário não encontrado.");
+        return;
+      }
+      var mes = parseInt(cal.dataset.mes, 10) || (new Date().getMonth() + 1);
+      var sel = cal.dataset.sel || new Date().toISOString().slice(0, 10);
+      var url = "/calendar?year=" + encodeURIComponent(ano) +
+                "&month=" + encodeURIComponent(mes) +
+                "&sel=" + encodeURIComponent(sel);
+      htmx.ajax("GET", url, {target: "#calendar", swap: "outerHTML"});
+    }
+
+    // Função para inicializar balões de dica em elementos com data-balloon-content
+    function initBalloons() {
+      $("[data-balloon-content]").each(function() {
+        var $el = $(this);
+        if ($el.data("balloon-initialized")) {
+          return;
+        }
+
+        var balloonContent = $el.data("balloon-content") || $el.attr("title") || $el.attr("aria-label");
+        if (!balloonContent) {
+          return;
+        }
+
+        $el.data("balloon-initialized", true);
+        $el.balloon({
+          contents: balloonContent,
+          position: $el.data("balloon-pos") || "right",
+          classname: $el.data("balloon-class") || "balloon-dark",
+          offsetX: 10,
+          offsetY: 0,
+          tipSize: 8,
+          showDuration: 120,
+          hideDuration: 100,
+          css: {
+            borderRadius: "6px"
+          }
+        });
+
+        // Mostra balão no foco para acessibilidade por teclado
+        $el.on("focus", function() {
+          $el.showBalloon();
+        });
+          
+          // Esconde balão quando perde foco
+          $el.on("blur", function() {
+            $el.hideBalloon();
+          });
+      });
+    }
+
+    function initCloseButtons() {
+      $(document).on('click', '.close-btn', function(event) {
+        event.preventDefault();
+        var targetId = $(this).data('close-target');
+        if (targetId) {
+          $('#' + targetId).hide();
+        }
+      });
+    }
+    
+    document.addEventListener("DOMContentLoaded", function () {
+      var sel = document.getElementById("tema");
+      var t = localStorage.getItem("tema");
+      if (sel && t) sel.value = t;
+      
+      // Inicializa balões de dica
+      initBalloons();
+      initCloseButtons();
+    });
+
+    $(document).ready(function() {
+      var $syncStatus = $("#sync-status");
+      var eventSource;
+
+      function startSyncStream() {
+        if (eventSource) {
+          eventSource.close();
+        }
+
+        eventSource = new EventSource('/sync-stream');
+        $("#sync-google").prop('disabled', true);
+
+        eventSource.onmessage = function(event) {
+          try {
+            var data = JSON.parse(event.data);
+          } catch (err) {
+            return;
+          }
+
+          if (data.status) {
+            if ($syncStatus.length === 0) {
+              $("#sync-container").html('<div id="sync-status"></div>');
+              $syncStatus = $("#sync-status");
+            }
+            var alertClass = data.status.toLowerCase().includes('sucesso') || data.status.toLowerCase().includes('conclu')
+              ? 'alert alert-success shadow-sm'
+              : data.status.toLowerCase().includes('erro')
+                ? 'alert alert-error shadow-sm'
+                : 'alert alert-info shadow-sm';
+
+            var html = '<div class="flex flex-col gap-2">'
+              + '<span class="text-lg font-semibold">Sincronizando com Google Calendar...</span>'
+              + ' <div class="space-y-1 max-h-60 overflow-y-auto">'
+              + '   <span id="sync-status-detail" class="text-sm opacity-70">' + data.status + '</span>'
+              + ' </div>'
+              + ' <button type="button" class="btn btn-xs btn-ghost btn-circle close-btn" data-close-target="sync-status" title="Fechar">✕</button>'
+              + '</div>'
+
+            $syncStatus.attr('class', alertClass).html(html).slideDown(200);
+          }
+
+          if (data.completed) {
+            // Armazena logs para o modal
+            if (data.logs) {
+              window.syncLogsData = data.logs;
+            }
+            
+            if (data.importados || data.exportados) {
+              var listsHtml = '';
+              if (data.importados && data.importados.length) {
+                listsHtml += renderSyncEventList(data.importados, 'importados');
+              }
+              if (data.exportados && data.exportados.length) {
+                listsHtml += renderSyncEventList(data.exportados, 'exportados');
+              }
+              if (listsHtml) {
+                $("#sync-container").append(listsHtml);
+              }
+            }
+            eventSource.close();
+            $("#sync-google").prop('disabled', false);
+          }
+        };
+
+        eventSource.onerror = function() {
+          if (eventSource.readyState === EventSource.CLOSED) {
+            $("#sync-google").prop('disabled', false);
+          } else {
+            $("#sync-status-detail").text('Erro de conexão com o servidor.');
+          }
+        };
+      }
+
+      function formatDateTimeForDisplay(dateTime) {
+        if (!dateTime) return '';
+        var normalized = String(dateTime).replace(' ', 'T');
+        if (normalized.endsWith('Z')) {
+          normalized = normalized.replace(/Z$/, '+00:00');
+        }
+        var date = new Date(normalized);
+        if (isNaN(date.getTime())) {
+          return String(dateTime);
+        }
+        var day = String(date.getDate()).padStart(2, '0');
+        var month = String(date.getMonth() + 1).padStart(2, '0');
+        var year = date.getFullYear();
+        var hours = String(date.getHours()).padStart(2, '0');
+        var minutes = String(date.getMinutes()).padStart(2, '0');
+        return day + '/' + month + '/' + year + ' às ' + hours + ':' + minutes;
+      }
+
+      function renderSyncEventList(events, mode) {
+        var modeLabel = mode === 'importados' ? 'Eventos Importados do Google' : 'Eventos Exportados para o Google';
+        var listClass = mode === 'importados' ? 'alert alert-info shadow-sm mt-4' : 'alert alert-success shadow-sm mt-4';
+        var items = events.map(function(ev) {
+          var title = ev.titulo || ev.summary || 'Sem título';
+          var start = formatDateTimeForDisplay(ev.inicio || ev.start || '');
+          var description = ev.desc || ev.description || '';
+          var detalhes = [];
+          if (ev.repeat) {
+            detalhes.push(ev.repeat);
+          }
+          if (ev.until) {
+            detalhes.push('até ' + ev.until);
+          }
+          var metaHtml = detalhes.length
+            ? '<div class="flex flex-wrap gap-2 text-xs opacity-60 mt-1">' +
+                detalhes.map(function(d) { return '<span class="badge badge-outline badge-sm">' + $('<div>').text(d).html() + '</span>'; }).join('') +
+              '</div>'
+            : '';
+          var descriptionHtml = description
+            ? '<div class="text-sm opacity-70">' + $('<div>').text(description).html() + '</div>'
+            : '';
+
+          return '<div class="rounded-xl border border-base-300 bg-base-200 p-4 space-y-2">'
+            + '<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">'
+            + '<span class="font-semibold">' + $('<div>').text(title).html() + '</span>'
+            + '<span class="text-xs opacity-70">' + $('<div>').text(start).html() + '</span>'
+            + '</div>'
+            + descriptionHtml
+            + metaHtml
+            + '</div>';
+        }).join('');
+        return '<div id="google-events-list-' + mode + '" class="' + listClass + '">' 
+          + '<div class="flex items-center justify-between mb-3">'
+          + '<span class="font-semibold">' + modeLabel + '</span>'
+          + '<button type="button" class="btn btn-xs btn-ghost btn-circle close-btn" data-close-target="google-events-list-' + mode + '" title="Fechar">✕</button>'
+          + '</div>'
+          + '<div class="space-y-3 max-h-80 overflow-y-auto">' + items + '</div>'
+          + '</div>';
+      }
+
+      $("#sync-google").on("click", function(event) {
+        event.preventDefault();
+        startSyncStream();
+      });
+    });
+    
+    // Inicializa balões de dica após qualquer troca do HTMX
+    document.addEventListener("htmx:afterSwap", function(evt) {
+      initBalloons();
+    });
+  </script>
+<style>*, ::before, ::after{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }::backdrop{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }/* ! tailwindcss v3.4.17 | MIT License | https://tailwindcss.com */*,::after,::before{box-sizing:border-box;border-width:0;border-style:solid;border-color:#e5e7eb}::after,::before{--tw-content:''}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;tab-size:4;font-family:ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0;padding:0}legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]:where(:not([hidden=until-found])){display:none}.absolute{position:absolute}.relative{position:relative}.bottom-1{bottom:0.25rem}.mx-auto{margin-left:auto;margin-right:auto}.my-2{margin-top:0.5rem;margin-bottom:0.5rem}.mb-2{margin-bottom:0.5rem}.mb-4{margin-bottom:1rem}.mt-1{margin-top:0.25rem}.mt-4{margin-top:1rem}.flex{display:flex}.grid{display:grid}.h-1\.5{height:0.375rem}.h-12{height:3rem}.max-h-96{max-height:24rem}.max-h-60{max-height:15rem}.min-h-screen{min-height:100vh}.w-1\.5{width:0.375rem}.w-24{width:6rem}.w-28{width:7rem}.w-auto{width:auto}.w-full{width:100%}.max-w-2xl{max-width:42rem}.max-w-5xl{max-width:64rem}.flex-1{flex:1 1 0%}.grid-cols-7{grid-template-columns:repeat(7, minmax(0, 1fr))}.flex-col{flex-direction:column}.items-start{align-items:flex-start}.items-center{align-items:center}.justify-start{justify-content:flex-start}.justify-center{justify-content:center}.justify-between{justify-content:space-between}.gap-0{gap:0px}.gap-1{gap:0.25rem}.gap-2{gap:0.5rem}.gap-3{gap:0.75rem}.gap-4{gap:1rem}.space-y-2 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.5rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.5rem * var(--tw-space-y-reverse))}.space-y-4 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1rem * var(--tw-space-y-reverse))}.space-y-1 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.25rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.25rem * var(--tw-space-y-reverse))}.overflow-y-auto{overflow-y:auto}.whitespace-nowrap{white-space:nowrap}.rounded-full{border-radius:9999px}.rounded-lg{border-radius:0.5rem}.p-3{padding:0.75rem}.p-4{padding:1rem}.py-1{padding-top:0.25rem;padding-bottom:0.25rem}.py-4{padding-top:1rem;padding-bottom:1rem}.text-center{text-align:center}.font-mono{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace}.text-2xl{font-size:1.5rem;line-height:2rem}.text-lg{font-size:1.125rem;line-height:1.75rem}.text-sm{font-size:0.875rem;line-height:1.25rem}.text-xs{font-size:0.75rem;line-height:1rem}.font-bold{font-weight:700}.font-medium{font-weight:500}.font-semibold{font-weight:600}.text-red-400{--tw-text-opacity:1;color:rgb(248 113 113 / var(--tw-text-opacity, 1))}.opacity-50{opacity:0.5}.opacity-60{opacity:0.6}.opacity-70{opacity:0.7}.shadow-md{--tw-shadow:0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);--tw-shadow-colored:0 4px 6px -1px var(--tw-shadow-color), 0 2px 4px -2px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.shadow-sm{--tw-shadow:0 1px 2px 0 rgb(0 0 0 / 0.05);--tw-shadow-colored:0 1px 2px 0 var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}@media (min-width: 640px){.sm\:w-auto{width:auto}.sm\:flex-row{flex-direction:row}.sm\:items-center{align-items:center}.sm\:justify-end{justify-content:flex-end}}@media (min-width: 768px){.md\:grid-cols-2{grid-template-columns:repeat(2, minmax(0, 1fr))}}</style><style>                      .htmx-indicator{opacity:0}                      .htmx-request .htmx-indicator{opacity:1; transition: opacity 200ms ease-in;}                      .htmx-request.htmx-indicator{opacity:1; transition: opacity 200ms ease-in;}                    </style></head>
+<body class="bg-base-200 min-h-screen">
+  <div class="max-w-5xl mx-auto p-4 space-y-4">
+    <header class="flex items-center justify-center gap-4">
+      <h1 class="text-2xl font-bold">📅 Agenda Brasileira Definitiva</h1>
+    </header>
+    <div id="alerts-container">
+        <div id="alerts-banner"></div>
+        <div id="proximos-eventos" class="alert alert-warning shadow-sm"><div class="flex items-center gap-2"><span class="opacity-50">Nenhum evento futuro para hoje.</span></div><button type="button" class="btn btn-xs btn-ghost btn-circle close-btn" data-close-target="proximos-eventos" title="Fechar">✕</button></div>
+    </div>
+    <div id="sync-container">
+        <div id="sync-status" style="" class="alert alert-error shadow-sm"><div class="flex flex-col gap-2"><span class="text-lg font-semibold">Sincronizando com Google Calendar...</span> <div class="space-y-1 max-h-60 overflow-y-auto">   <span id="sync-status-detail" class="text-sm opacity-70">Erros encontrados durante a sincronização</span> </div> <button type="button" class="btn btn-xs btn-ghost btn-circle close-btn" data-close-target="sync-status" title="Fechar">✕</button></div></div>
+    </div>
+    <div class="grid md:grid-cols-2 gap-4 items-start">
+      <div class="space-y-4">
+        <div id="calendar" class="card bg-base-100 shadow-md" data-ano="2026" data-mes="8" data-sel="2026-08-13">
+  <div class="card-body p-4">
+    <div class="flex items-center justify-between mb-2">
+      <button class="btn btn-sm btn-ghost" hx-get="/calendar?year=2026&amp;month=7&amp;sel=2026-08-13" hx-target="#calendar" hx-swap="outerHTML">‹</button>
+      <h2 class="text-lg font-bold">Agosto 2026</h2>
+      <button class="btn btn-sm btn-ghost" hx-get="/calendar?year=2026&amp;month=9&amp;sel=2026-08-13" hx-target="#calendar" hx-swap="outerHTML">›</button>
+    </div>
+    <div class="grid grid-cols-7 gap-1"><div class="text-center text-xs font-semibold opacity-60 py-1">Domingo</div><div class="text-center text-xs font-semibold opacity-60 py-1">Segunda</div><div class="text-center text-xs font-semibold opacity-60 py-1">Terça</div><div class="text-center text-xs font-semibold opacity-60 py-1">Quarta</div><div class="text-center text-xs font-semibold opacity-60 py-1">Quinta</div><div class="text-center text-xs font-semibold opacity-60 py-1">Sexta</div><div class="text-center text-xs font-semibold opacity-60 py-1">Sábado</div></div>
+    <div class="grid grid-cols-7 gap-1 mt-1"><div></div><div></div><div></div><div></div><div></div><div></div><button class="btn btn-sm btn-ghost w-full flex-col gap-0 h-12 relative" hx-get="/day?date=2026-08-01" hx-target="#day-panel"><span>1</span><span class="w-1.5 h-1.5 rounded-full bg-accent absolute bottom-1"></span></button><button class="btn btn-sm btn-ghost w-full flex-col gap-0 h-12 relative" hx-get="/day?date=2026-08-02" hx-target="#day-panel"><span>2</span><span class="w-1.5 h-1.5 rounded-full bg-accent absolute bottom-1"></span></button><button class="btn btn-sm btn-ghost w-full flex-col gap-0 h-12 relative" hx-get="/day?date=2026-08-03" hx-target="#day-panel"><span>3</span></button><button class="btn btn-sm btn-ghost w-full flex-col gap-0 h-12 relative" hx-get="/day?date=2026-08-04" hx-target="#day-panel"><span>4</span><span class="w-1.5 h-1.5 rounded-full bg-accent absolute bottom-1"></span></button><button class="btn btn-sm btn-ghost w-full flex-col gap-0 h-12 relative" hx-get="/day?date=2026-08-05" hx-target="#day-panel"><span>5</span><span class="w-1.5 h-1.5 rounded-full bg-accent absolute bottom-1"></span></button><button class="btn btn-sm btn-ghost w-full flex-col gap-0 h-12 relative" hx-get="/day?date=2026-08-06" hx-target="#day-panel"><span>6</span><span class="w-1.5 h-1.5 rounded-full bg-accent absolute bottom-1"></span></button><button class="btn btn-sm btn-ghost w-full flex-col gap-0 h-12 relative" hx-get="/day?date=2026-08-07" hx-target="#day-panel"><span>7</span><span class="w-1.5 h-1.5 rounded-full bg-accent absolute bottom-1"></span></button><button class="btn btn-sm btn-ghost w-full flex-col gap-0 h-12 relative" hx-get="/day?date=2026-08-08" hx-target="#day-panel"><span>8</span><span class="w-1.5 h-1.5 rounded-full bg-accent absolute bottom-1"></span></button><button class="btn btn-sm btn-ghost w-full flex-col gap-0 h-12 relative" hx-get="/day?date=2026-08-09" hx-target="#day-panel"><span>9</span><span class="w-1.5 h-1.5 rounded-full bg-accent absolute bottom-1"></span></button><button class="btn btn-sm btn-ghost w-full flex-col gap-0 h-12 relative" hx-get="/day?date=2026-08-10" hx-target="#day-panel"><span>10</span><span class="w-1.5 h-1.5 rounded-full bg-accent absolute bottom-1"></span></button><button class="btn btn-sm btn-ghost w-full flex-col gap-0 h-12 relative" hx-get="/day?date=2026-08-11" hx-target="#day-panel"><span>11</span><span class="w-1.5 h-1.5 rounded-full bg-accent absolute bottom-1"></span></button><button class="btn btn-sm btn-ghost w-full flex-col gap-0 h-12 relative" hx-get="/day?date=2026-08-12" hx-target="#day-panel"><span>12</span><span class="w-1.5 h-1.5 rounded-full bg-accent absolute bottom-1"></span></button><button class="btn btn-sm btn-primary w-full flex-col gap-0 h-12 relative" hx-get="/day?date=2026-08-13" hx-target="#day-panel"><span>13</span><span class="w-1.5 h-1.5 rounded-full bg-accent absolute bottom-1"></span></button><button class="btn btn-sm btn-ghost w-full flex-col gap-0 h-12 relative" hx-get="/day?date=2026-08-14" hx-target="#day-panel"><span>14</span><span class="w-1.5 h-1.5 rounded-full bg-accent absolute bottom-1"></span></button><button class="btn btn-sm btn-ghost w-full flex-col gap-0 h-12 relative" hx-get="/day?date=2026-08-15" hx-target="#day-panel"><span>15</span></button><button class="btn btn-sm btn-ghost w-full flex-col gap-0 h-12 relative" hx-get="/day?date=2026-08-16" hx-target="#day-panel"><span>16</span></button><button class="btn btn-sm btn-ghost w-full flex-col gap-0 h-12 relative" hx-get="/day?date=2026-08-17" hx-target="#day-panel"><span>17</span><span class="w-1.5 h-1.5 rounded-full bg-accent absolute bottom-1"></span></button><button class="btn btn-sm btn-ghost w-full flex-col gap-0 h-12 relative" hx-get="/day?date=2026-08-18" hx-target="#day-panel"><span>18</span></button><button class="btn btn-sm btn-ghost w-full flex-col gap-0 h-12 relative" hx-get="/day?date=2026-08-19" hx-target="#day-panel"><span>19</span></button><button class="btn btn-sm btn-ghost w-full flex-col gap-0 h-12 relative" hx-get="/day?date=2026-08-20" hx-target="#day-panel"><span>20</span></button><button class="btn btn-sm btn-ghost w-full flex-col gap-0 h-12 relative" hx-get="/day?date=2026-08-21" hx-target="#day-panel"><span>21</span><span class="w-1.5 h-1.5 rounded-full bg-accent absolute bottom-1"></span></button><button class="btn btn-sm btn-ghost w-full flex-col gap-0 h-12 relative" hx-get="/day?date=2026-08-22" hx-target="#day-panel"><span>22</span><span class="w-1.5 h-1.5 rounded-full bg-accent absolute bottom-1"></span></button><button class="btn btn-sm btn-ghost w-full flex-col gap-0 h-12 relative" hx-get="/day?date=2026-08-23" hx-target="#day-panel"><span>23</span></button><button class="btn btn-sm btn-ghost w-full flex-col gap-0 h-12 relative" hx-get="/day?date=2026-08-24" hx-target="#day-panel"><span>24</span><span class="w-1.5 h-1.5 rounded-full bg-accent absolute bottom-1"></span></button><button class="btn btn-sm btn-ghost w-full flex-col gap-0 h-12 relative" hx-get="/day?date=2026-08-25" hx-target="#day-panel"><span>25</span></button><button class="btn btn-sm btn-ghost w-full flex-col gap-0 h-12 relative" hx-get="/day?date=2026-08-26" hx-target="#day-panel"><span>26</span></button><button class="btn btn-sm btn-ghost w-full flex-col gap-0 h-12 relative" hx-get="/day?date=2026-08-27" hx-target="#day-panel"><span>27</span></button><button class="btn btn-sm btn-ghost w-full flex-col gap-0 h-12 relative" hx-get="/day?date=2026-08-28" hx-target="#day-panel"><span>28</span><span class="w-1.5 h-1.5 rounded-full bg-accent absolute bottom-1"></span></button><button class="btn btn-sm btn-ghost w-full flex-col gap-0 h-12 relative" hx-get="/day?date=2026-08-29" hx-target="#day-panel"><span>29</span></button><button class="btn btn-sm btn-ghost w-full flex-col gap-0 h-12 relative" hx-get="/day?date=2026-08-30" hx-target="#day-panel"><span>30</span></button><button class="btn btn-sm btn-ghost w-full flex-col gap-0 h-12 relative" hx-get="/day?date=2026-08-31" hx-target="#day-panel"><span>31</span></button><div></div><div></div><div></div><div></div><div></div></div>
+  </div>
+</div>
+        <div class="card bg-base-100 shadow-md p-4">
+  <div class="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full">
+    <div class="flex items-center gap-2 w-full sm:w-auto justify-start sm:justify-end">
+      <select id="tema" onchange="trocarTema(this.value)" class="select select-bordered select-sm w-full sm:w-auto" title="Tema">
+        <option value="light">light</option><option value="dark">dark</option><option value="cupcake">cupcake</option><option value="corporate">corporate</option><option value="emerald">emerald</option><option value="synthwave">synthwave</option><option value="dracula">dracula</option><option value="night">night</option><option value="coffee">coffee</option><option value="winter">winter</option>
+      </select>  
+      <select id="ano-calendario" onchange="trocarAnoCalendario(this.value)" class="select select-bordered select-sm w-auto" title="Ano do calendário">
+        <option value="2025">2025</option><option value="2026" selected="">2026</option><option value="2027">2027</option><option value="2028">2028</option>
+      </select>
+      <button class="btn btn-sm btn-primary" hx-get="/alerts" hx-target="#alerts-container" hx-swap="innerHTML">Próx. evento</button>
+      <button id="sync-google" class="btn btn-sm btn-primary">☁ Sinc. Google </button>
+    </div>
+  </div>
+</div>
+      </div>
+      <div id="day-panel" class="card bg-base-100 shadow-md">
+  <div class="card-body p-4">
+    <h2 class="text-lg font-bold">13/08/2026 · Quinta</h2>
+    <ul class="space-y-2"><li class="flex items-start gap-3 p-3 rounded-lg bg-base-200">
+  <div class="text-primary font-mono font-semibold whitespace-nowrap">
+    10:00–10:15
+  </div>
+  <div class="flex-1">
+    <div class="font-medium flex items-center gap-2">Ligar perguntando se vai agendar a cirurgia <div class="flex gap-1">
+      <button class="btn btn-xs btn-ghost" hx-get="/edit?id=145&amp;date=2026-08-13" hx-target="#day-panel">✎</button>
+      <button class="btn btn-xs btn-ghost text-error" hx-post="/delete?id=145&amp;date=2026-08-13" hx-target="#day-panel" hx-confirm="Remover 'Ligar perguntando se vai agendar a cirurgia'?">✕</button>
+    </div></div>
+    
+    <div class="text-sm opacity-70">ligar 99838-5844</div>
+  </div>
+</li><li class="flex items-start gap-3 p-3 rounded-lg bg-base-200">
+  <div class="text-primary font-mono font-semibold whitespace-nowrap">
+    14:30–15:30
+  </div>
+  <div class="flex-1">
+    <div class="font-medium flex items-center gap-2">vistoria do carro no SIA Detran DF <div class="flex gap-1">
+      <button class="btn btn-xs btn-ghost" hx-get="/edit?id=40&amp;date=2026-08-13" hx-target="#day-panel">✎</button>
+      <button class="btn btn-xs btn-ghost text-error" hx-post="/delete?id=40&amp;date=2026-08-13" hx-target="#day-panel" hx-confirm="Remover 'vistoria do carro no SIA Detran DF'?">✕</button>
+    </div></div>
+    <span class="text-red-400 font-medium">(evento cancelado)</span>
+    
+  </div>
+</li><li class="flex items-start gap-3 p-3 rounded-lg bg-base-200">
+  <div class="text-primary font-mono font-semibold whitespace-nowrap">
+    15:00–16:00
+  </div>
+  <div class="flex-1">
+    <div class="font-medium flex items-center gap-2">Receber Marceneiro <div class="flex gap-1">
+      <button class="btn btn-xs btn-ghost" hx-get="/edit?id=138&amp;date=2026-08-13" hx-target="#day-panel">✎</button>
+      <button class="btn btn-xs btn-ghost text-error" hx-post="/delete?id=138&amp;date=2026-08-13" hx-target="#day-panel" hx-confirm="Remover 'Receber Marceneiro'?">✕</button>
+    </div></div>
+    <span class="text-red-400 font-medium">(evento cancelado)</span>
+    
+  </div>
+</li></ul>
+    <div class="divider my-2">Novo evento</div>
+    <form hx-post="/event" hx-target="#day-panel" class="space-y-2" data-duration-confirm="">
+      <input type="hidden" name="panel_date" value="2026-08-13" style="">
+      <input name="titulo" required="" placeholder="Título" class="input input-bordered input-sm w-full" data-balloon-content="Preencha o título do evento" data-balloon-pos="right" data-balloon-class="balloon-dark" style="">
+      <div class="flex gap-2">
+        <input type="date" name="date" value="2026-08-13" required="" class="input input-bordered input-sm flex-1" data-balloon-content="Selecione a data do evento" data-balloon-pos="right" data-balloon-class="balloon-dark" style="">
+        <input type="time" name="time" value="09:00" required="" class="input input-bordered input-sm w-28" data-balloon-content="Defina a hora de início" data-balloon-pos="right" data-balloon-class="balloon-dark" style="">
+        <input type="number" name="dur" min="1" placeholder="min" class="input input-bordered input-sm w-24 duration-field" id="dur-new" title="duração em minutos" data-balloon-content="Duração em minutos" data-balloon-pos="right" data-balloon-class="balloon-dark" style="">
+      </div>
+      <div class="flex gap-2">
+        <select name="repeat" class="select select-bordered select-sm flex-1" data-balloon-content="Tipo de repetição" data-balloon-pos="right" data-balloon-class="balloon-dark">
+          <option value="none" selected="">sem repetição</option><option value="daily">daily</option><option value="weekdays">weekdays</option><option value="weekly">weekly</option><option value="monthly">monthly</option>
+        </select>
+        <input type="date" name="until" title="repetir até (opcional)" class="input input-bordered input-sm w-full" data-balloon-content="Data limite para repetição (opcional)" data-balloon-pos="right" data-balloon-class="balloon-dark" style="">
+        <select name="status" class="select select-bordered select-sm flex-1" data-balloon-content="Status do evento" data-balloon-pos="right" data-balloon-class="balloon-dark">
+                <option value="">Status do evento</option><option value="concluido">Concluído</option><option value="cancelado">Cancelado</option>
+              </select>
+      </div>
+      <input name="desc" placeholder="Descrição (opcional)" class="input input-bordered input-sm w-full" data-balloon-content="Descrição opcional do evento" data-balloon-pos="right" data-balloon-class="balloon-dark" style="">
+      <button type="submit" class="btn btn-primary btn-sm w-full">Adicionar</button>
+    </form>
+  </div>
+</div>
+    </div>
+  </div>
+
+  <!-- Modal de confirmação para duração vazia -->
+  <dialog id="duracao-modal" class="modal">
+    <div class="modal-box">
+      <h3 class="font-bold text-lg">Duração do evento</h3>
+      <p class="py-4">Deseja salvar esse evento sem tempo de duração?</p>
+      <div class="modal-action">
+        <form method="dialog" id="duracao-modal-form">
+          <button id="btn-duracao-nao" type="button" class="btn btn-ghost">Não</button>
+          <button id="btn-duracao-sim" type="button" class="btn btn-primary">Sim</button>
+        </form>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+      <button>Fechar</button>
+    </form>
+  </dialog>
+
+  <!-- Modal de detalhes da sincronização -->
+  
+  <dialog id="sync-details-modal" class="modal modal-bottom sm:modal-middle">
+    <div class="modal-box max-w-2xl">
+      <h3 class="font-bold text-lg mb-4">Detalhes da Sincronização</h3>
+      <div id="sync-details-content" class="max-h-96 overflow-y-auto space-y-2 text-sm">
+        <!-- Conteúdo preenchido via JS -->
+      </div>
+      <div class="modal-action mt-4">
+        <form method="dialog">
+          <button class="btn btn-primary">Fechar</button>
+        </form>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+      <button>Fechar</button>
+    </form>
+  </dialog>
+
+
+  
+  <script>
+    // Modal de confirmação para duração vazia
+    document.addEventListener('DOMContentLoaded', function() {
+      const forms = document.querySelectorAll('form[data-duration-confirm]');
+      
+      forms.forEach(form => {
+        form.addEventListener('submit', function(e) {
+          const durInput = form.querySelector('input[name="dur"]');
+          if (durInput && !durInput.value.trim()) {
+            e.preventDefault();
+            const modal = document.getElementById('duracao-modal');
+            if (modal) {
+              // Armazena o formulário para submissão posterior
+              modal.dataset.pendingForm = form.id || 'unknown';
+              // Adiciona ID único se não tiver
+              if (!form.id) {
+                form.id = 'form-' + Date.now();
+                modal.dataset.pendingForm = form.id;
+              }
+              modal.showModal();
+            }
+          }
+        });
+      });
+      
+      // Botão "Sim" - submete o formulário sem duração
+      const btnSim = document.getElementById('btn-duracao-sim');
+      if (btnSim) {
+        btnSim.addEventListener('click', function() {
+          const modal = document.getElementById('duracao-modal');
+          if (modal && modal.dataset.pendingForm) {
+            const form = document.getElementById(modal.dataset.pendingForm);
+            if (form) {
+              // Remove a validação de duração e submete
+              form.removeAttribute('data-duration-confirm');
+              form.submit();
+            }
+          }
+          modal.close();
+        });
+      }
+      
+      // Botão "Não" - apenas fecha o modal
+      const btnNao = document.getElementById('btn-duracao-nao');
+      if (btnNao) {
+        btnNao.addEventListener('click', function() {
+          const modal = document.getElementById('duracao-modal');
+          if (modal) {
+            modal.close();
+          }
+        });
+      }
+    });
+  </script>
+
+  
+  <script>
+    // Dados globais dos logs de sincronização (preenchidos pelo servidor)
+    window.syncLogsData = [];
+
+    function openSyncDetailsModal() {
+      const modal = document.getElementById('sync-details-modal');
+      const content = document.getElementById('sync-details-content');
+      
+      if (!modal || !content) return;
+      
+      // Renderiza os logs
+      if (window.syncLogsData && window.syncLogsData.length > 0) {
+        let html = '';
+        let currentSection = '';
+        
+        window.syncLogsData.forEach(log => {
+          // Detecta seções
+          if (log.includes('EXPORTAÇÃO') || log.includes('Enviando eventos locais')) {
+            currentSection = 'export';
+            html += '<div class="font-semibold text-primary mb-1">>> EXPORTAÇÃO (Local → Google)</div>';
+          } else if (log.includes('IMPORTAÇÃO') || log.includes('Buscando eventos do Google')) {
+            currentSection = 'import';
+            html += '<div class="font-semibold text-info mb-1">>> IMPORTAÇÃO (Google → Local)</div>';
+          } else if (log.includes('Exportação para Google concluída') || 
+                     log.includes('eventos importados do Google') || 
+                     log.includes('Nenhum evento novo para importar')) {
+            html += `<div class="text-success text-xs ml-2">${escapeHtml(log)}</div>`;
+          } else if (log.includes('SIMULAÇÃO') || log.includes('Erro') || log.includes('erro')) {
+            html += `<div class="text-error text-xs ml-2 font-medium">${escapeHtml(log)}</div>`;
+          } else if (log.trim()) {
+            html += `<div class="text-xs opacity-70 ml-2">${escapeHtml(log)}</div>`;
+          }
+        });
+        
+        content.innerHTML = html;
+      } else {
+        content.innerHTML = '<div class="text-center opacity-50 py-4">Nenhum detalhe disponível.</div>';
+      }
+      
+      modal.showModal();
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Fecha modal com ESC
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        const modal = document.getElementById('sync-details-modal');
+        if (modal && modal.open) {
+          modal.close();
+        }
+      }
+    });
+  </script>
+
+
+</body></html>
