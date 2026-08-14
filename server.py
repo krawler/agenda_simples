@@ -859,6 +859,33 @@ def render_page(sel):
       }}
     }}
     
+    function exportarDados() {{
+      fetch('/export')
+        .then(r => {{
+          const disposition = r.headers.get('Content-Disposition') || '';
+          return r.blob().then(blob => ({{ blob, disposition }}));
+        }})
+        .then(({{ blob, disposition }}) => {{
+          const m = /filename="([^"]+)"/.exec(disposition);
+          const filename = m ? m[1] : 'eventos-backup-' + new Date().toISOString().slice(0,10) + '.json';
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.style.display = 'none';
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(() => {{
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          }}, 1000);
+        }})
+        .catch(err => {{
+          console.error('Export error', err);
+          alert('Falha ao exportar: ' + err.message);
+        }});
+    }}
+    
     document.addEventListener("DOMContentLoaded", function () {{
       var sel = document.getElementById("tema");
       var t = localStorage.getItem("tema");
@@ -1057,7 +1084,7 @@ def render_page(sel):
 
   <!-- Modal de Configurações -->
   <dialog id="config-modal" class="modal modal-bottom sm:modal-middle">
-    <div class="modal-box max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div class="modal-box max-w-lg max-h-[90vh] overflow-y-auto">
       {config_modal_html}
     </div>
     <form method="dialog" class="modal-backdrop">
@@ -1344,11 +1371,15 @@ class Handler(BaseHTTPRequestHandler):
     def _exportar_eventos(self):
         """Exporta eventos para JSON."""
         eventos = agenda.carregar()
+        payload = json.dumps(eventos, ensure_ascii=False, indent=2).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Disposition", f'attachment; filename="eventos-backup-{date.today().isoformat()}.json"')
+        self.send_header("Content-Length", str(len(payload)))
+        # Indica que vamos fechar a conexão após enviar (ajuda clientes a finalizar download)
+        self.send_header("Connection", "close")
         self.end_headers()
-        self.wfile.write(json.dumps(eventos, ensure_ascii=False, indent=2).encode("utf-8"))
+        self.wfile.write(payload)
 
     def _importar_eventos(self, corpo):
         """Importa eventos de JSON."""
