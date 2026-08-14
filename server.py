@@ -110,7 +110,7 @@ def render_controls(ano_atual=None):
   <div class="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full">
     <div class="flex items-center gap-2 w-full sm:w-auto justify-start sm:justify-end">
       <button class="btn btn-sm btn-primary" hx-get="/alerts" hx-target="#alerts-container"
-        hx-swap="innerHTML">Próximos eventos</button>
+        hx-swap="innerHTML">→ Próximos </button>
       <button id="sync-google" class="btn btn-sm btn-primary">☁ Sincronizar eventos </button>
       <button class="btn btn-sm btn-primary" onclick="abrirConfig()">
         ⚙️ Configurações
