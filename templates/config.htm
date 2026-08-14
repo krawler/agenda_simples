@@ -372,19 +372,6 @@
     }
   }
 
-  function exportarDados() {
-    fetch('/export')
-      .then(r => r.blob())
-      .then(blob => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'eventos-backup-' + new Date().toISOString().slice(0,10) + '.json';
-        a.click();
-        URL.revokeObjectURL(url);
-      });
-  }
-
   function importarDados() {
     const input = document.createElement('input');
     input.type = 'file';
