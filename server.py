@@ -104,22 +104,11 @@ def render_calendar(ano, mes, sel):
 
 
 def render_controls(ano_atual=None):
-    """Renderiza os controles (botões, seletor de ano) para ficar abaixo do calendário."""
-    if ano_atual is None:
-        ano_atual = date.today().year
     
-    opts_ano = "".join(
-        f'<option value="{a}"{" selected" if a == ano_atual else ""}>{a}</option>'
-        for a in ANOS_DISPONIVEIS
-    )
-    
+    """Renderiza os controles (botões, seletor de ano) para ficar abaixo do calendário.""" 
     return f'''<div class="card bg-base-100 shadow-md p-4">
   <div class="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full">
     <div class="flex items-center gap-2 w-full sm:w-auto justify-start sm:justify-end">
-      <select id="ano-calendario" onchange="trocarAnoCalendario(this.value)"
-        class="select select-bordered select-sm w-auto" title="Ano do calendário">
-        {opts_ano}
-      </select>
       <button class="btn btn-sm btn-primary" hx-get="/alerts" hx-target="#alerts-container"
         hx-swap="innerHTML">Próx. evento</button>
       <button id="sync-google" class="btn btn-sm btn-primary">☁ Sinc. Google </button>
