@@ -17,6 +17,8 @@ import calendar as calmod
 import html
 import json
 import threading
+import time
+import os
 from datetime import date, datetime, time, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
@@ -33,6 +35,15 @@ ANOS_DISPONIVEIS = [2025, 2026, 2027, 2028]
 
 # Caminho para templates
 TEMPLATES_DIR = Path(__file__).parent / "templates"
+
+# Armazenar conexões SSE ativas
+sse_clients = []
+
+# Armazenar timestamps de arquivos monitoradas
+file_timestamps = {}
+
+# Lock para acesso thread-safe aos clientes SSE
+sse_lock = threading.Lock()
 
 
 # --------------------------------------------------------------- consultas dados
@@ -1171,6 +1182,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._stream_sync_status()
             case "/export":
                 self._exportar_eventos()
+            case "/live-refresh":
+                self._stream_live_refresh()
             case _:
                 self._send("<h1>404</h1>", 404)
 
@@ -1232,6 +1245,35 @@ class Handler(BaseHTTPRequestHandler):
                 "logs": logs
             })
 
+    def _stream_live_refresh(self):
+        """Endpoint SSE para notificações de live-refresh."""
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Connection", "keep-alive")
+        self.end_headers()
+
+        # Registra o cliente
+        client_id = id(self)
+        with sse_lock:
+            sse_clients.append({
+                'id': client_id,
+                'write': self._write_sse
+            })
+
+        try:
+            # Mantém a conexão viva
+            while True:
+                time.sleep(1)
+                # Envia um ping para manter a conexão ativa
+                self._write_sse({"type": "ping"})
+        except Exception:
+            pass
+        finally:
+            # Remove o cliente quando desconecta
+            with sse_lock:
+                sse_clients[:] = [c for c in sse_clients if c['id'] != client_id]
+
     def _criar_evento(self, form):
         d = self._parse_date(form.get("date"))
         hora = form.get("time", "09:00")
@@ -1258,6 +1300,8 @@ class Handler(BaseHTTPRequestHandler):
         agenda.salvar(eventos)
         painel = self._parse_date(form.get("panel_date")) or d
         self._responder_com_calendario(painel)
+        # Notifica clientes sobre a mudança
+        self._notificar_clientes()
 
     def _atualizar_evento(self, form):
         eid = int(form.get("id", "0"))
@@ -1293,6 +1337,8 @@ class Handler(BaseHTTPRequestHandler):
             
             agenda.salvar(eventos)
         self._responder_com_calendario(self._parse_date(form.get("panel_date")))
+        # Notifica clientes sobre a mudança
+        self._notificar_clientes()
 
     def _remover_evento(self, q):
         eid = int(q.get("id", ["0"])[0])
@@ -1307,6 +1353,8 @@ class Handler(BaseHTTPRequestHandler):
         agenda.salvar(eventos)
         painel = self._parse_date(q.get("date", [""])[0])
         self._responder_com_calendario(painel)
+        # Notifica clientes sobre a mudança
+        self._notificar_clientes()
 
     def _pular_ocorrencia(self, q):
         eid = int(q.get("id", ["0"])[0])
@@ -1319,6 +1367,8 @@ class Handler(BaseHTTPRequestHandler):
             e["except"] = sorted(excecoes)
             agenda.salvar(eventos)
         self._responder_com_calendario(self._parse_date(q.get("date", [""])[0]))
+        # Notifica clientes sobre a mudança
+        self._notificar_clientes()
 
     def _sincronizar_google(self):
         
@@ -1415,8 +1465,52 @@ class Handler(BaseHTTPRequestHandler):
                                    'id="calendar" hx-swap-oob="true"', 1)
         self._send(render_day_panel(painel) + cal_oob)
 
+    def _notificar_clientes(self):
+        """Notifica todos os clientes SSE conectados sobre mudanças."""
+        with sse_lock:
+            for client in sse_clients[:]:
+                try:
+                    client['write']({"type": "refresh", "timestamp": time.time()})
+                except Exception:
+                    # Remove cliente com erro
+                    sse_clients.remove(client)
+
     def log_message(self, *a):
         pass
+
+
+def monitorar_arquivos():
+    """Monitora arquivos por mudanças e notifica clientes SSE."""
+    arquivos_monitorados = [
+        Path(__file__).parent / "eventos.json",
+        Path(__file__).parent / "server.py",
+        TEMPLATES_DIR / "config.htm"
+    ]
+    
+    # Inicializa timestamps
+    for arquivo in arquivos_monitorados:
+        if arquivo.exists():
+            file_timestamps[arquivo] = arquivo.stat().st_mtime
+    
+    while True:
+        time.sleep(1)
+        mudanca_detectada = False
+        
+        for arquivo in arquivos_monitorados:
+            if arquivo.exists():
+                timestamp_atual = arquivo.stat().st_mtime
+                if file_timestamps.get(arquivo) != timestamp_atual:
+                    file_timestamps[arquivo] = timestamp_atual
+                    mudanca_detectada = True
+        
+        if mudanca_detectada:
+            # Notifica todos os clientes
+            with sse_lock:
+                for client in sse_clients[:]:
+                    try:
+                        client['write']({"type": "refresh", "timestamp": time.time()})
+                    except Exception:
+                        sse_clients.remove(client)
 
 
 def main():
@@ -1425,6 +1519,11 @@ def main():
     p.add_argument("--host", default="127.0.0.1",
                    help="Endereço de escuta. Use 0.0.0.0 para aceitar conexões externas.")
     args = p.parse_args()
+    
+    # Inicia thread de monitoramento de arquivos
+    monitor_thread = threading.Thread(target=monitorar_arquivos, daemon=True)
+    monitor_thread.start()
+    
     try:
         srv = ThreadingHTTPServer((args.host, args.port), Handler)
     except PermissionError as ex:
