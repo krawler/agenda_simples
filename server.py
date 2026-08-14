@@ -112,7 +112,7 @@ def render_controls(ano_atual=None):
       <button class="btn btn-sm btn-primary" hx-get="/alerts" hx-target="#alerts-container"
         hx-swap="innerHTML">Próximos eventos</button>
       <button id="sync-google" class="btn btn-sm btn-primary">☁ Sincronizar eventos </button>
-      <button class="btn btn-sm btn-secondary" onclick="abrirConfig()">
+      <button class="btn btn-sm btn-primary" onclick="abrirConfig()">
         ⚙️ Configurações
       </button>
     </div>
@@ -1053,14 +1053,13 @@ def render_page(sel):
     <div id="sync-container">
         {sync_html}
     </div>
-    <div class="grid md:grid-cols-2 gap-4 items-start">
+    <div class="grid md:grid-cols-2 gap-4">
       <div class="space-y-4">
         {calendar_html}
         {controls_html}
       </div>
       {day_panel_html}
     </div>
-  </div>
 
   <!-- Modal de confirmação para duração vazia -->
   <dialog id="duracao-modal" class="modal">
