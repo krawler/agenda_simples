@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Interface web (secundaria) da agenda simples.
 
 Mini servidor em stdlib puro (http.server) que reaproveita a logica do
@@ -17,8 +17,11 @@ import calendar as calmod
 import html
 import json
 import threading
-import time
+import time as time_module
 import os
+import sys
+import subprocess
+import signal
 from datetime import date, datetime, time, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
@@ -41,6 +44,15 @@ sse_clients = []
 
 # Armazenar timestamps de arquivos monitoradas
 file_timestamps = {}
+
+# Flag para evitar múltiplos restarts simultâneos
+restart_em_andamento = False
+
+# Instância global do servidor para permitir shutdown coordenado.
+server_instance = None
+
+# Arquivo PID para controle do servidor em modo dev.
+PID_FILE = Path(__file__).parent / ".agenda_server.pid"
 
 # Lock para acesso thread-safe aos clientes SSE
 sse_lock = threading.Lock()
@@ -261,8 +273,8 @@ def render_edit_form(e, occ, panel_date):
     </div>
     <div class="flex gap-2">
       <button type="submit" class="btn btn-primary btn-sm flex-1">Salvar</button>
-      <button type="button" class="btn btn-ghost btn-sm"
-        hx-get="/day?date={iso}" hx-target="#day-panel">Cancelar</button>
+      <button type="button" class="btn btn-ghost btn-sm flex-1"
+        hx-get="/day?date={iso}" hx-target="#day-panel">Cancelar Evento</button>
     </div>
   </form>
 </li>'''
@@ -342,7 +354,10 @@ def render_day_panel(d, editando=None):
         data-balloon-content="Descrição opcional do evento"
         data-balloon-pos="right"
         data-balloon-class="balloon-dark">
-      <button type="submit" class="btn btn-primary btn-sm w-full">Adicionar</button>
+      <div class="flex gap-2">  
+        <button type="submit" class="btn btn-primary btn-sm flex-1">Adicionar</button>
+        <button type="button" class="btn btn-ghost btn-sm bg-gray-100 flex-1">Cancelar</button>
+      </div>  
     </form>'''
 
     return f'''<div id="day-panel" class="card bg-base-100 shadow-md">
@@ -896,6 +911,65 @@ def render_page(sel):
           alert('Falha ao exportar: ' + err.message);
         }});
     }}
+
+    function iniciarLiveRefresh() {{
+      var liveRefreshSource = null;
+      var reconnectTimer = null;
+      var jaConectouUmaVez = false;
+      var houveDesconexao = false;
+
+      function conectar() {{
+        if (liveRefreshSource) {{
+          return;
+        }}
+
+        liveRefreshSource = new EventSource('/live-refresh');
+
+        liveRefreshSource.onopen = function() {{
+          if (jaConectouUmaVez && houveDesconexao) {{
+            window.location.reload();
+            return;
+          }}
+          jaConectouUmaVez = true;
+          houveDesconexao = false;
+        }};
+
+        liveRefreshSource.onmessage = function(event) {{
+          try {{
+            var data = JSON.parse(event.data);
+            if (data && data.type === 'refresh') {{
+              window.location.reload();
+            }}
+          }} catch (err) {{
+            // ignora payloads inválidos
+          }}
+        }};
+
+        liveRefreshSource.onerror = function() {{
+          houveDesconexao = true;
+          if (liveRefreshSource) {{
+            liveRefreshSource.close();
+            liveRefreshSource = null;
+          }}
+
+          if (!reconnectTimer) {{
+            reconnectTimer = setTimeout(function() {{
+              reconnectTimer = null;
+              conectar();
+            }}, 1500);
+          }}
+        }};
+      }}
+
+      conectar();
+
+      window.addEventListener('beforeunload', function() {{
+        if (liveRefreshSource) {{
+          liveRefreshSource.close();
+          liveRefreshSource = null;
+        }}
+      }});
+    }}
     
     document.addEventListener("DOMContentLoaded", function () {{
       var sel = document.getElementById("tema");
@@ -905,6 +979,7 @@ def render_page(sel):
       // Inicializa balões de dica
       initBalloons();
       initCloseButtons();
+      iniciarLiveRefresh();
     }});
 
     $(document).ready(function() {{
@@ -1108,9 +1183,59 @@ def render_page(sel):
 </html>'''
 
 
+def salvar_pid_em_arquivo():
+  try:
+    PID_FILE.write_text(str(os.getpid()), encoding="utf-8")
+  except Exception:
+    pass
+
+
+def ler_pid_do_arquivo():
+  try:
+    texto = PID_FILE.read_text(encoding="utf-8").strip()
+    return int(texto) if texto else None
+  except Exception:
+    return None
+
+
+def remover_pid_arquivo_se_for_deste_processo():
+  try:
+    if not PID_FILE.exists():
+      return
+    pid = ler_pid_do_arquivo()
+    if pid == os.getpid():
+      PID_FILE.unlink(missing_ok=True)
+  except Exception:
+    pass
+
+
+def encerrar_processo_por_pid(pid):
+  if not pid:
+    return False
+  if os.name == "nt":
+    res = subprocess.run(
+      ["taskkill", "/PID", str(pid), "/T", "/F"],
+      capture_output=True,
+      text=True,
+    )
+    return res.returncode == 0
+  try:
+    os.kill(pid, signal.SIGTERM)
+    return True
+  except Exception:
+    return False
+
+
 # ------------------------------------------------------------------------- server
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
+
+    def handle(self):
+        try:
+            super().handle()
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, OSError):
+            # Conexões SSE podem ser encerradas pelo navegador durante reload.
+            pass
 
     def _send(self, corpo, status=200):
         dados = corpo.encode("utf-8")
@@ -1149,6 +1274,18 @@ class Handler(BaseHTTPRequestHandler):
         match u.path:
             case "/":
                 self._send(render_page(date.today()))
+            case "/__dev_status":
+                self._send_json({
+                    "ok": True,
+                    "pid": os.getpid(),
+                    "restart_em_andamento": restart_em_andamento,
+                    "sse_clients": len(sse_clients),
+                    "timestamp": time_module.time(),
+                })
+            case "/__dev_stop":
+                self._send_json({"ok": True, "msg": "Encerrando servidor..."})
+                if server_instance is not None:
+                    threading.Thread(target=server_instance.shutdown, daemon=True).start()
             case "/day":
                 d = self._parse_date(q.get("date", [""])[0])
                 self._send(render_day_panel(d))
@@ -1264,15 +1401,17 @@ class Handler(BaseHTTPRequestHandler):
         try:
             # Mantém a conexão viva
             while True:
-                time.sleep(1)
+                time_module.sleep(1)
                 # Envia um ping para manter a conexão ativa
-                self._write_sse({"type": "ping"})
+                with sse_lock:
+                    self._write_sse({"type": "ping"})
         except Exception:
             pass
         finally:
             # Remove o cliente quando desconecta
             with sse_lock:
                 sse_clients[:] = [c for c in sse_clients if c['id'] != client_id]
+            self.close_connection = True
 
     def _criar_evento(self, form):
         d = self._parse_date(form.get("date"))
@@ -1470,7 +1609,7 @@ class Handler(BaseHTTPRequestHandler):
         with sse_lock:
             for client in sse_clients[:]:
                 try:
-                    client['write']({"type": "refresh", "timestamp": time.time()})
+                    client['write']({"type": "refresh", "timestamp": time_module.time()})
                 except Exception:
                     # Remove cliente com erro
                     sse_clients.remove(client)
@@ -1479,10 +1618,16 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 
+class ReusableThreadingHTTPServer(ThreadingHTTPServer):
+    allow_reuse_address = True
+
+
 def monitorar_arquivos():
     """Monitora arquivos por mudanças e notifica clientes SSE."""
+    global restart_em_andamento
     arquivos_monitorados = [
         Path(__file__).parent / "eventos.json",
+    Path(__file__).parent / "agenda.py",
         Path(__file__).parent / "server.py",
         TEMPLATES_DIR / "config.htm"
     ]
@@ -1493,8 +1638,9 @@ def monitorar_arquivos():
             file_timestamps[arquivo] = arquivo.stat().st_mtime
     
     while True:
-        time.sleep(1)
+        time_module.sleep(1)
         mudanca_detectada = False
+        precisa_reiniciar = False
         
         for arquivo in arquivos_monitorados:
             if arquivo.exists():
@@ -1502,30 +1648,61 @@ def monitorar_arquivos():
                 if file_timestamps.get(arquivo) != timestamp_atual:
                     file_timestamps[arquivo] = timestamp_atual
                     mudanca_detectada = True
+                if arquivo.suffix.lower() == ".py":
+                  precisa_reiniciar = True
         
         if mudanca_detectada:
             # Notifica todos os clientes
             with sse_lock:
                 for client in sse_clients[:]:
                     try:
-                        client['write']({"type": "refresh", "timestamp": time.time()})
+                        client['write']({"type": "refresh", "timestamp": time_module.time()})
                     except Exception:
                         sse_clients.remove(client)
 
+            # Mudanças em .py exigem reinício do processo para aplicar novo código.
+            if precisa_reiniciar and not restart_em_andamento:
+                restart_em_andamento = True
+                print("[live-refresh] Mudança em arquivo Python detectada. Reiniciando servidor...")
+                if server_instance is not None:
+                    # Shutdown deve ocorrer fora da thread do servidor.
+                    threading.Thread(target=server_instance.shutdown, daemon=True).start()
+
 
 def main():
+    global server_instance
     p = argparse.ArgumentParser(description="Servidor web da agenda simples.")
     p.add_argument("--port", type=int, default=8000)
     p.add_argument("--host", default="127.0.0.1",
                    help="Endereço de escuta. Use 0.0.0.0 para aceitar conexões externas.")
+    p.add_argument("--stop", action="store_true",
+            help="Encerra o servidor em execução usando o arquivo PID e sai.")
     args = p.parse_args()
+
+    if args.stop:
+      pid = ler_pid_do_arquivo()
+      if not pid:
+        print("Nenhum PID encontrado para encerrar.")
+        return
+      ok = encerrar_processo_por_pid(pid)
+      if ok:
+        print(f"Servidor encerrado (PID {pid}).")
+        try:
+          PID_FILE.unlink(missing_ok=True)
+        except Exception:
+          pass
+      else:
+        print(f"Não foi possível encerrar o PID {pid}.")
+      return
     
     # Inicia thread de monitoramento de arquivos
     monitor_thread = threading.Thread(target=monitorar_arquivos, daemon=True)
     monitor_thread.start()
     
     try:
-        srv = ThreadingHTTPServer((args.host, args.port), Handler)
+        srv = ReusableThreadingHTTPServer((args.host, args.port), Handler)
+        server_instance = srv
+        salvar_pid_em_arquivo()
     except PermissionError as ex:
         print(f"Erro ao abrir o servidor em {args.host}:{args.port}: {ex}")
         print("Tente usar uma porta diferente ou execute com privilégios elevados.")
@@ -1537,6 +1714,24 @@ def main():
         srv.serve_forever()
     except KeyboardInterrupt:
         print("\nServidor encerrado.")
+    finally:
+        try:
+            srv.server_close()
+        except Exception:
+            pass
+    if not restart_em_andamento:
+      remover_pid_arquivo_se_for_deste_processo()
+
+    if restart_em_andamento:
+      creation_flags = 0
+      if os.name == "nt":
+        creation_flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+      subprocess.Popen(
+        [sys.executable] + sys.argv,
+        cwd=str(Path(__file__).parent),
+        creationflags=creation_flags,
+      )
+      return
 
 
 if __name__ == "__main__":
