@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """Interface web (secundaria) da agenda simples.
 
 Mini servidor em stdlib puro (http.server) que reaproveita a logica do
@@ -991,6 +991,31 @@ def render_page(sel):
       }});
     }}
     
+    // Função para usar Enter como Tab
+    function initEnterAsTab() {{
+      $(document).on('keydown', 'input, select, textarea, button', function(e) {{
+        if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.altKey) {{
+          // Não intercepta Enter em botões (que já submetem forms)
+          if (this.tagName === 'BUTTON') return;
+          
+          e.preventDefault();
+          // Move foco para o próximo elemento focável
+          var $this = $(this);
+          var $next = $this.closest('.form-control, .flex, .space-y-2, .card-body, form').find('input, select, textarea, button').not(':disabled').nextAll('input, select, textarea, button').not(':disabled').first();
+          
+          if ($next.length) {{
+            $next.focus();
+          }} else {{
+            // Se não houver próximo, tenta submeter o formulário
+            var $form = $this.closest('form');
+            if ($form.length) {{
+              $form.submit();
+            }}
+          }}
+        }}
+      }});
+    }}
+    
     document.addEventListener("DOMContentLoaded", function () {{
       var sel = document.getElementById("tema");
       var t = localStorage.getItem("tema");
@@ -1000,6 +1025,7 @@ def render_page(sel):
       initBalloons();
       initCloseButtons();
       iniciarLiveRefresh();
+      initEnterAsTab();
     }});
 
     $(document).ready(function() {{
@@ -1201,49 +1227,6 @@ def render_page(sel):
   {SYNC_MODAL_JS}
 </body>
 </html>'''
-
-
-def salvar_pid_em_arquivo():
-  try:
-    PID_FILE.write_text(str(os.getpid()), encoding="utf-8")
-  except Exception:
-    pass
-
-
-def ler_pid_do_arquivo():
-  try:
-    texto = PID_FILE.read_text(encoding="utf-8").strip()
-    return int(texto) if texto else None
-  except Exception:
-    return None
-
-
-def remover_pid_arquivo_se_for_deste_processo():
-  try:
-    if not PID_FILE.exists():
-      return
-    pid = ler_pid_do_arquivo()
-    if pid == os.getpid():
-      PID_FILE.unlink(missing_ok=True)
-  except Exception:
-    pass
-
-
-def encerrar_processo_por_pid(pid):
-  if not pid:
-    return False
-  if os.name == "nt":
-    res = subprocess.run(
-      ["taskkill", "/PID", str(pid), "/T", "/F"],
-      capture_output=True,
-      text=True,
-    )
-    return res.returncode == 0
-  try:
-    os.kill(pid, signal.SIGTERM)
-    return True
-  except Exception:
-    return False
 
 
 # ------------------------------------------------------------------------- server
@@ -1647,7 +1630,7 @@ def monitorar_arquivos():
     global restart_em_andamento
     arquivos_monitorados = [
         Path(__file__).parent / "eventos.json",
-    Path(__file__).parent / "agenda.py",
+        Path(__file__).parent / "agenda.py",
         Path(__file__).parent / "server.py",
         TEMPLATES_DIR / "config.htm"
     ]
