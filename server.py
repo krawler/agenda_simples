@@ -392,7 +392,7 @@ def render_proximos_eventos_dia(d):
                     <div class="space-y-1 max-h-60 overflow-y-auto">
                       {linhas}
                     </div>
-                    <button type="button" class="btn btn-xs btn-ghost btn-circle close-btn" data-close-target="proximos-eventos" title="Fechar">✕</button>
+                    <button type="button" class="btn btn-xs btn-ghost btn-circle close-btn close-alert" data-close-target="proximos-eventos" title="Fechar">✕</button>
                   </div>'''
     
     # Se não há eventos para hoje, mostra mensagem e eventos de amanhã (se houver)
@@ -423,7 +423,7 @@ def render_proximos_eventos_dia(d):
                    {linhas_amanha}
                  </div>'''
     
-    html_fechar = '<button type="button" class="btn btn-xs btn-ghost btn-circle close-btn" data-close-target="proximos-eventos" title="Fechar">✕</button>'
+    html_fechar = '<button type="button" class="btn btn-xs btn-ghost btn-circle close-btn close-alert" data-close-target="proximos-eventos" title="Fechar">✕</button>'
     html_fim = '</div>'
     
     return html_hoje + html_amanha + html_fechar + html_fim
@@ -442,7 +442,7 @@ def render_alerts_banner():
     return (f'<div id="alerts-banner" class="alert alert-error shadow-sm">'
             f'<div class="flex flex-wrap gap-2 items-center">'
             f'<span class="font-semibold">⚠ Eventos iniciando em 30 min:</span>{linhas}</div>'
-            f'<button type="button" class="btn btn-xs btn-ghost btn-circle close-btn" data-close-target="alerts-banner" title="Fechar">✕</button>'
+            f'<button type="button" class="btn btn-xs btn-ghost btn-circle close-btn close-alert" data-close-target="alerts-banner" title="Fechar">✕</button>'
             f'</div>'
             f'</div>')
 
@@ -867,13 +867,33 @@ def render_page(sel):
       }});
     }}
 
-    function initCloseButtons() {{
-      $(document).on('click', '.close-btn', function(event) {{
-        event.preventDefault();
-        var targetId = $(this).data('close-target');
-        if (targetId) {{
-          $('#' + targetId).hide();
+    function fecharPorTarget(elements) {{
+      if (!elements || elements.length === 0) return;
+      for (var i = 0; i < elements.length; i++) {{
+        var el = elements[i];
+        if (el.tagName === 'DIALOG') {{
+          // Dialog precisa de close() para remover corretamente o backdrop.
+          if (typeof el.close === 'function') {{
+            el.close();
+          }} else {{
+            $('#' + el.id).hide();
+          }}
+          return;
         }}
+      }}
+      
+      // Alertas e outros blocos comuns.
+      for (var i = 0; i < elements.length; i++) {{
+        var el = elements[i];
+        $(el).closest('.alert').hide();
+      }}
+    }}
+
+    function initCloseButtons() {{
+      $(document).on('click', '.close-btn, .close-alert', function(event) {{
+        event.preventDefault();
+        var elements = $(this);
+        fecharPorTarget(elements);
       }});
     }}
     
