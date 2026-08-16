@@ -1672,6 +1672,54 @@ def monitorar_arquivos():
                     threading.Thread(target=server_instance.shutdown, daemon=True).start()
 
 
+def ler_pid_do_arquivo():
+    """Lê o PID do arquivo .agenda_server.pid."""
+    try:
+        if PID_FILE.exists():
+            return int(PID_FILE.read_text().strip())
+    except (ValueError, IOError):
+        pass
+    return None
+
+
+def encerrar_processo_por_pid(pid):
+    """Encerra o processo com o PID especificado."""
+    try:
+        if os.name == "nt":
+            # No Windows, usa taskkill
+            result = subprocess.run(
+                ["taskkill", "/PID", str(pid), "/F"],
+                capture_output=True,
+                text=True
+            )
+            return result.returncode == 0
+        else:
+            # No Unix/Linux, usa kill
+            os.kill(pid, signal.SIGTERM)
+            return True
+    except Exception:
+        return False
+
+
+def salvar_pid_em_arquivo():
+    """Salva o PID atual no arquivo .agenda_server.pid."""
+    try:
+        PID_FILE.write_text(str(os.getpid()))
+    except Exception:
+        pass
+
+
+def remover_pid_arquivo_se_for_deste_processo():
+    """Remove o arquivo PID se ele pertencer a este processo."""
+    try:
+        if PID_FILE.exists():
+            pid_arquivo = int(PID_FILE.read_text().strip())
+            if pid_arquivo == os.getpid():
+                PID_FILE.unlink()
+    except (ValueError, IOError):
+        pass
+
+
 def main():
     global server_instance
     p = argparse.ArgumentParser(description="Servidor web da agenda simples.")
