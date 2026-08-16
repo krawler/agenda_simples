@@ -219,7 +219,9 @@
   document.addEventListener('DOMContentLoaded', function() {
     carregarConfiguracoes();
     initBalloons();
-    initEnterAsTab();
+    if (typeof initEnterAsTab === 'function') {
+      initEnterAsTab();
+    }
   });
 
   // Carrega configurações do localStorage
@@ -455,28 +457,4 @@
     }
   }
 
-  // Função para usar Enter como Tab
-  function initEnterAsTab() {
-    $(document).on('keydown', 'input, select, textarea, button', function(e) {
-      if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.altKey) {
-        // Não intercepta Enter em botões (que já submetem forms)
-        if (this.tagName === 'BUTTON') return;
-        
-        e.preventDefault();
-        // Move foco para o próximo elemento focável
-        var $this = $(this);
-        var $next = $this.closest('.form-control, .flex, .space-y-2, .card-body, form').find('input, select, textarea, button').not(':disabled').nextAll('input, select, textarea, button').not(':disabled').first();
-        
-        if ($next.length) {
-          $next.focus();
-        } else {
-          // Se não houver próximo, tenta submeter o formulário
-          var $form = $this.closest('form');
-          if ($form.length) {
-            $form.submit();
-          }
-        }
-      }
-    });
-  }
 </script>
