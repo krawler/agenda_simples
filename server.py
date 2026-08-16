@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Interface web (secundaria) da agenda simples.
 
 Mini servidor em stdlib puro (http.server) que reaproveita a logica do
@@ -436,7 +436,14 @@ def render_alerts_banner():
     agora = datetime.now()
     linhas = "".join(
         f'<span class="badge badge-error gap-1">⏰ {esc(e["titulo"])} '
-        f'({int((occ - agora).total_seconds() // 60)} min)</span> '
+        f'<span class="countdown font-mono text-lg js-alert-countdown" '
+        f'data-occ-iso="{occ.strftime("%Y-%m-%dT%H:%M:%S")}">'
+        f'<span class="js-cd-h" style="--value:0;" aria-live="polite" aria-label="0">00</span>'
+        f':'
+        f'<span class="js-cd-m" style="--value:0; --digits: 2;" aria-live="polite" aria-label="0">00</span>'
+        f':'
+        f'<span class="js-cd-s" style="--value:0; --digits: 2;" aria-live="polite" aria-label="0">00</span>'
+        f'</span>'
         for occ, e in itens)
     return (f'<div id="alerts-banner" class="alert alert-error shadow-sm">'
             f'<div class="flex flex-wrap gap-2 items-center">'
@@ -1116,6 +1123,54 @@ def render_page(sel):
         }});
     }}
 
+    function initAlertCountdowns() {{
+      function atualizarCountdowns() {{
+        var countdowns = document.querySelectorAll('.js-alert-countdown[data-occ-iso]');
+        var agora = Date.now();
+
+        countdowns.forEach(function(wrapper) {{
+          var alvoTexto = wrapper.getAttribute('data-occ-iso');
+          var alvo = new Date(alvoTexto);
+          if (Number.isNaN(alvo.getTime())) {{
+            return;
+          }}
+
+          var totalSegundos = Math.floor((alvo.getTime() - agora) / 1000);
+          if (totalSegundos < 0) {{
+            totalSegundos = 0;
+          }}
+
+          var horas = Math.floor(totalSegundos / 3600);
+          var minutos = Math.floor((totalSegundos % 3600) / 60);
+          var segundos = totalSegundos % 60;
+
+          var hEl = wrapper.querySelector('.js-cd-h');
+          var mEl = wrapper.querySelector('.js-cd-m');
+          var sEl = wrapper.querySelector('.js-cd-s');
+          if (!hEl || !mEl || !sEl) {{
+            return;
+          }}
+
+          hEl.style.setProperty('--value', String(horas));
+          hEl.setAttribute('aria-label', String(horas));
+          hEl.textContent = String(horas).padStart(2, '0');
+
+          mEl.style.setProperty('--value', String(minutos));
+          mEl.setAttribute('aria-label', String(minutos));
+          mEl.textContent = String(minutos).padStart(2, '0');
+
+          sEl.style.setProperty('--value', String(segundos));
+          sEl.setAttribute('aria-label', String(segundos));
+          sEl.textContent = String(segundos).padStart(2, '0');
+        }});
+      }}
+
+      atualizarCountdowns();
+      if (!window.__alertCountdownTimer) {{
+        window.__alertCountdownTimer = setInterval(atualizarCountdowns, 1000);
+      }}
+    }}
+
     document.addEventListener("DOMContentLoaded", function () {{
       var sel = document.getElementById("tema");
       var t = localStorage.getItem("tema");
@@ -1127,6 +1182,7 @@ def render_page(sel):
       iniciarLiveRefresh();
       initEnterAsTab();
       initNotificacoes();
+      initAlertCountdowns();
       
       // Verifica eventos próximos a cada 1 minuto
       setInterval(verificarEventosProximos, 60000);
@@ -1276,6 +1332,7 @@ def render_page(sel):
     // Inicializa balões de dica após qualquer troca do HTMX
     document.addEventListener("htmx:afterSwap", function(evt) {{
       initBalloons();
+      initAlertCountdowns();
     }});
   </script>
 </head>
