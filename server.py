@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """Interface web (secundaria) da agenda simples.
 
 Mini servidor em stdlib puro (http.server) que reaproveita a logica do
@@ -1050,16 +1050,88 @@ def render_page(sel):
       }}, true);
     }}
     
+    // Função para solicitar permissão de notificação e disparar notificações
+    function initNotificacoes() {{
+      if (!("Notification" in window)) {{
+        console.warn("Este navegador não suporta notificações.");
+        return;
+      }}
+
+      // Solicita permissão se ainda não concedida
+      if (Notification.permission === "default") {{
+        Notification.requestPermission().then(function(permission) {{
+          if (permission === "granted") {{
+            console.log("Permissão de notificação concedida.");
+          }}
+        }});
+      }}
+    }}
+
+    // Função para disparar notificação push
+    function dispararNotificacao(titulo, mensagem, icone) {{
+      if (Notification.permission === "granted") {{
+        var notificacao = new Notification(titulo, {{
+          body: mensagem,
+          icon: icone || "/favicon.ico",
+          requireInteraction: true,
+          tag: "agenda-notificacao"
+        }});
+
+        notificacao.onclick = function() {{
+          window.focus();
+          this.close();
+        }};
+
+        // Fecha a notificação após 10 segundos se o usuário não interagir
+        setTimeout(function() {{
+          notificacao.close();
+        }}, 10000);
+      }}
+    }}
+
+    // Função para verificar eventos próximos e disparar notificações
+    function verificarEventosProximos() {{
+      var alertasMinutos = JSON.parse(localStorage.getItem('alertasMinutos') || '[60,30,15]');
+      var notificacoesHabilitadas = localStorage.getItem('notificacoesNavegador') === 'true';
+      
+      if (!notificacoesHabilitadas) {{
+        return;
+      }}
+
+      fetch('/api/eventos-proximos')
+        .then(r => r.json())
+        .then(data => {{
+          if (data.eventos && data.eventos.length > 0) {{
+            data.eventos.forEach(function(evento) {{
+              dispararNotificacao(
+                '⏰ ' + evento.titulo,
+                'Evento em ' + evento.minutos_restantes + ' minutos (' + evento.hora + ')',
+                '/favicon.ico'
+              );
+            }});
+          }}
+        }})
+        .catch(err => {{
+          console.error('Erro ao verificar eventos próximos:', err);
+        }});
+    }}
+
     document.addEventListener("DOMContentLoaded", function () {{
       var sel = document.getElementById("tema");
       var t = localStorage.getItem("tema");
       if (sel && t) sel.value = t;
       
-      // Inicializa balões de dica
+      // Inicializa balões de dique
       initBalloons();
       initCloseButtons();
       iniciarLiveRefresh();
       initEnterAsTab();
+      initNotificacoes();
+      
+      // Verifica eventos próximos a cada 1 minuto
+      setInterval(verificarEventosProximos, 60000);
+      // Verifica imediatamente ao carregar
+      setTimeout(verificarEventosProximos, 2000);
     }});
 
     $(document).ready(function() {{
@@ -1360,6 +1432,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._exportar_eventos()
             case "/live-refresh":
                 self._stream_live_refresh()
+            case "/api/eventos-proximos":
+                self._api_eventos_proximos()
             case _:
                 self._send("<h1>404</h1>", 404)
 
@@ -1451,6 +1525,34 @@ class Handler(BaseHTTPRequestHandler):
             with sse_lock:
                 sse_clients[:] = [c for c in sse_clients if c['id'] != client_id]
             self.close_connection = True
+
+    def _api_eventos_proximos(self):
+        """API para retornar eventos próximos para notificações push."""
+        agora = datetime.now()
+        max_min = max(agenda.ALERTAS_MIN)
+        eventos_proximos = agenda.expandir(agenda.carregar(), agora, agora + timedelta(minutes=max_min))
+        
+        eventos_list = []
+        for occ, e in eventos_proximos:
+            faltam = int((occ - agora).total_seconds() // 60)
+            # Verifica se este evento está dentro de uma das janelas de alerta configuradas
+            alertas_minutos = [60, 30, 15]  # Valores padrão
+            try:
+                alertas_minutos = json.loads(
+                    self.headers.get('X-Alertas-Minutos', '[60,30,15]')
+                )
+            except:
+                pass
+            
+            if any(faltam <= am for am in alertas_minutos):
+                eventos_list.append({
+                    "titulo": e["titulo"],
+                    "minutos_restantes": faltam,
+                    "hora": occ.strftime("%H:%M"),
+                    "id": e["id"]
+                })
+        
+        self._send_json({"eventos": eventos_list})
 
     def _criar_evento(self, form):
         d = self._parse_date(form.get("date"))
