@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Interface web (secundaria) da agenda simples.
 
 Mini servidor em stdlib puro (http.server) que reaproveita a logica do
@@ -1058,7 +1058,7 @@ def render_page(sel):
       }}
 
       // Solicita permissão se ainda não concedida
-      if (Notification.permission === "default") {{
+      if (Notification.permission === "default" || Notification.permission === "denied") {{
         Notification.requestPermission().then(function(permission) {{
           if (permission === "granted") {{
             console.log("Permissão de notificação concedida.");
