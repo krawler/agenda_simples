@@ -11,3 +11,4 @@ eventos.json
 .vscode/launch.json
 token.json
 credentials.json
+.agenda_server.pid
