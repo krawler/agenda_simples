@@ -215,7 +215,7 @@ def render_edit_form(e, occ, panel_date):
         current_status = "concluido"
     
     status_opts = ''.join([
-        f'<option value=""{" selected" if current_status == "" else ""}>Status do evento</option>',
+        f'<option value=""{" selected" if current_status == "" else ""}>Status</option>',
         f'<option value="concluido"{" selected" if current_status == "concluido" else ""}>Concluído</option>',
         f'<option value="cancelado"{" selected" if current_status == "cancelado" else ""}>Cancelado</option>'
     ])
@@ -246,7 +246,7 @@ def render_edit_form(e, occ, panel_date):
         data-balloon-pos="right"
         data-balloon-class="balloon-dark">
     </div>
-    <div class="flex gap-2">
+    <div class="flex grid md:grid-cols-3 gap-2">
       <select name="repeat" class="select select-bordered select-sm flex-1"
         data-balloon-content="Tipo de repetição"
         data-balloon-pos="right"
@@ -257,7 +257,6 @@ def render_edit_form(e, occ, panel_date):
                 data-balloon-pos="right"
                 data-balloon-class="balloon-dark">
         <select name="status" class="select select-bordered select-sm flex-1"
-              style="padding-right: 0.4rem;"
               data-balloon-content="Status do evento"
               data-balloon-pos="right"
               data-balloon-class="balloon-dark">
@@ -298,7 +297,7 @@ def render_day_panel(d, editando=None):
 
     # Opções de status para novo evento
     status_opts_novo = ''.join([
-        '<option value="">Status do evento</option>',
+        '<option value="">Status</option>',
         '<option value="concluido">Concluído</option>',
         '<option value="cancelado">Cancelado</option>'
     ])
@@ -330,7 +329,7 @@ def render_day_panel(d, editando=None):
           data-balloon-pos="right"
           data-balloon-class="balloon-dark">
       </div>
-      <div class="flex gap-2">
+      <div class="flex grid md:grid-cols-3 gap-2">
         <select name="repeat" class="select select-bordered select-sm flex-1"
           data-balloon-content="Tipo de repetição"
           data-balloon-pos="right"
@@ -993,28 +992,62 @@ def render_page(sel):
     
     // Função para usar Enter como Tab
     function initEnterAsTab() {{
-      $(document).on('keydown', 'input, select', function(e) {{
-        
-        if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.altKey) {{
-          
-          e.preventDefault();
-          // Move foco para o próximo elemento focável
-          var $this = $(this);
-          //.form-control, .flex, .space-y-2, .card-body,
-          var $next = $this.closest('form')
-                           .find('input, select').not(':disabled')
-                           .nextAll('input, select').not(':disabled')
-                           .first();
-          
-          if ($next.length) {{
-            $next.focus();
-          }} else {{
-            var $form = $this.closest('form');
-            if ($form.length)
-                $form.submit();
-          }}
+      if (window.__enterAsTabInitialized) {{
+        return;
+      }}
+
+      window.__enterAsTabInitialized = true;
+
+      document.addEventListener('keydown', function(e) {{
+        if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) {{
+          return;
         }}
-      }});
+
+        var target = e.target;
+        if (!target || !(target instanceof HTMLElement)) {{
+          return;
+        }}
+
+        if (!target.matches('input, select')) {{
+          return;
+        }}
+
+        var type = (target.getAttribute('type') || '').toLowerCase();
+        if (['hidden', 'submit', 'button', 'checkbox', 'radio', 'file'].includes(type)) {{
+          return;
+        }}
+
+        var form = target.closest('form');
+        if (!form) {{
+          return;
+        }}
+
+        e.preventDefault();
+
+        var campos = Array.from(form.querySelectorAll('input, select'))
+          .filter(function(node) {{
+            var nodeType = (node.getAttribute('type') || '').toLowerCase();
+            if (node.disabled) return false;
+            if (nodeType === 'hidden') return false;
+            if (node.getAttribute('tabindex') === '-1') return false;
+            if (!(node.offsetWidth || node.offsetHeight || node.getClientRects().length)) return false;
+            return true;
+          }});
+
+        var indiceAtual = campos.indexOf(target);
+        var proximo = indiceAtual >= 0 ? campos[indiceAtual + 1] : null;
+        var botaoSubmit = form.querySelector('button[type="submit"], input[type="submit"]');
+
+        if (proximo) {{
+          proximo.focus();
+        }} else if (botaoSubmit && !botaoSubmit.disabled) {{
+          botaoSubmit.focus();
+        }} else if (typeof form.requestSubmit === 'function') {{
+          form.requestSubmit();
+        }} else {{
+          form.submit();
+        }}
+      }}, true);
     }}
     
     document.addEventListener("DOMContentLoaded", function () {{
@@ -1193,6 +1226,8 @@ def render_page(sel):
       </div>
       {day_panel_html}
     </div>
+    <!-- esse fechamento mantem a div principal centralizada -->
+  </div>
 
   <!-- Modal de confirmação para duração vazia -->
   <dialog id="duracao-modal" class="modal">
