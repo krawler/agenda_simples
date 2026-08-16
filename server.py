@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Interface web (secundaria) da agenda simples.
 
 Mini servidor em stdlib puro (http.server) que reaproveita a logica do
@@ -308,7 +308,7 @@ def render_day_panel(d, editando=None):
         novo_evento = f'''<div class="divider my-2">Novo evento</div>
     <form hx-post="/event" hx-target="#day-panel" class="space-y-2" data-duration-confirm>
       <input type="hidden" name="panel_date" value="{iso}">
-      <input name="titulo" required placeholder="Título"
+      <input name="titulo" required placeholder="Título" type="text"
         class="input input-bordered input-sm w-full"
         data-balloon-content="Preencha o título do evento"
         data-balloon-pos="right"
@@ -338,10 +338,10 @@ def render_day_panel(d, editando=None):
           {opts}
         </select>
         <input type="date" name="until" title="repetir até (opcional)"
-        class="input input-bordered input-sm w-full"
-        data-balloon-content="Data limite para repetição (opcional)"
-        data-balloon-pos="right"
-        data-balloon-class="balloon-dark">
+          class="input input-bordered input-sm w-full"
+          data-balloon-content="Data limite para repetição (opcional)"
+          data-balloon-pos="right"
+          data-balloon-class="balloon-dark">
         <select name="status" class="select select-bordered select-sm flex-1"
                 data-balloon-content="Status do evento"
                 data-balloon-pos="right"
@@ -993,24 +993,25 @@ def render_page(sel):
     
     // Função para usar Enter como Tab
     function initEnterAsTab() {{
-      $(document).on('keydown', 'input, select, textarea, button', function(e) {{
+      $(document).on('keydown', 'input, select', function(e) {{
+        
         if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.altKey) {{
-          // Não intercepta Enter em botões (que já submetem forms)
-          if (this.tagName === 'BUTTON') return;
           
           e.preventDefault();
           // Move foco para o próximo elemento focável
           var $this = $(this);
-          var $next = $this.closest('.form-control, .flex, .space-y-2, .card-body, form').find('input, select, textarea, button').not(':disabled').nextAll('input, select, textarea, button').not(':disabled').first();
+          //.form-control, .flex, .space-y-2, .card-body,
+          var $next = $this.closest('form')
+                           .find('input, select').not(':disabled')
+                           .nextAll('input, select').not(':disabled')
+                           .first();
           
           if ($next.length) {{
             $next.focus();
           }} else {{
-            // Se não houver próximo, tenta submeter o formulário
             var $form = $this.closest('form');
-            if ($form.length) {{
-              $form.submit();
-            }}
+            if ($form.length)
+                $form.submit();
           }}
         }}
       }});
