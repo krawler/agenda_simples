@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """Interface web (secundaria) da agenda simples.
 
 Mini servidor em stdlib puro (http.server) que reaproveita a logica do
@@ -143,7 +143,7 @@ def render_controls(ano_atual=None):
         <button class="btn btn-sm btn-primary flex-1 min-w-[140px]" onclick="abrirConfig()">
           ⚙️ Configurações
         </button>
-        <button class="btn btn-sm btn-primary flex-1 min-w-[140px]" disabled title="Em desenvolvimento">
+        <button id="ideas-plans" class="btn btn-sm btn-primary flex-1 min-w-[140px]" onclick="abrirIdeiasPlanos()">
           💡 Ideias e planos
         </button>
       </div>
@@ -784,6 +784,25 @@ def load_config_template():
     return "<div class='alert alert-error'>Template config.htm não encontrado</div>"
 
 
+def render_ideas_plans():
+    """Renderiza a página de ideias e planos."""
+    return f'''<div id="ideas-plans-panel" class="card bg-base-100 shadow-md">
+  <div class="card-body p-4">
+    <h2 class="text-lg font-bold">💡 Ideias e Planos</h2>
+    <div class="space-y-4">
+      <div class="alert alert-info shadow-sm">
+        <div class="flex items-center gap-2">
+          <span class="opacity-70">Esta seção está em desenvolvimento. Em breve você poderá visualizar e gerenciar suas ideias e planos aqui.</span>
+        </div>
+      </div>
+      <div class="text-center opacity-50 py-6">
+        Volte em breve para novidades!
+      </div>
+    </div>
+  </div>
+</div>'''
+
+
 def render_page(sel):
     calendar_html = render_calendar(sel.year, sel.month, sel)
     controls_html = render_controls(sel.year)
@@ -841,8 +860,585 @@ def render_page(sel):
                 "&sel=" + encodeURIComponent(sel);
       htmx.ajax("GET", url, {{target: "#calendar", swap: "outerHTML"}});
     }}
+
+    // Função para inicializar balões de dica em elementos com data-balloon-content
+    function initBalloons() {{
+      $("[data-balloon-content]").each(function() {{
+        var $el = $(this);
+        if ($el.data("balloon-initialized")) {{
+          return;
+        }}
+
+        var balloonContent = $el.data("balloon-content") || $el.attr("title") || $el.attr("aria-label");
+        if (!balloonContent) {{
+          return;
+        }}
+
+        $el.data("balloon-initialized", true);
+        $el.balloon({{
+          contents: balloonContent,
+          position: $el.data("balloon-pos") || "right",
+          classname: $el.data("balloon-class") || "balloon-dark",
+          offsetX: 10,
+          offsetY: 0,
+          tipSize: 8,
+          showDuration: 120,
+          hideDuration: 100,
+          css: {{
+            borderRadius: "6px"
+          }}
+        }});
+
+        // Mostra balão no foco para acessibilidade por teclado
+        $el.on("focus", function() {{
+          $el.showBalloon();
+        }});
+          
+          // Esconde balão quando perde foco
+          $el.on("blur", function() {{
+            $el.hideBalloon();
+          }});
+      }});
+    }}
+
+    function fecharPorTarget(elements) {{
+      if (!elements || elements.length === 0) return;
+      for (var i = 0; i < elements.length; i++) {{
+        var el = elements[i];
+        if (el.tagName === 'DIALOG') {{
+          // Dialog precisa de close() para remover corretamente o backdrop.
+          if (typeof el.close === 'function') {{
+            el.close();
+          }} else {{
+            $('#' + el.id).hide();
+          }}
+          return;
+        }}
+      }}
+      
+      // Alertas e outros blocos comuns.
+      for (var i = 0; i < elements.length; i++) {{
+        var el = elements[i];
+        $(el).closest('.alert').hide();
+      }}
+    }}
+
+    function initCloseButtons() {{
+      $(document).on('click', '.close-btn, .close-alert', function(event) {{
+        event.preventDefault();
+        var elements = $(this);
+        fecharPorTarget(elements);
+      }});
+    }}
+    
+    // Abre modal de configurações
+    function abrirConfig() {{
+      const modal = document.getElementById('config-modal');
+      if (modal) {{
+        modal.showModal();
+      }}
+    }}
+    
+    // Abre a seção de ideias e planos
+    function abrirIdeiasPlanos() {{
+      // Carrega o conteúdo de ideias e planos no painel principal
+      fetch('/ideas-plans')
+        .then(r => r.text())
+        .then(html => {{
+          document.getElementById('day-panel').innerHTML = html;
+        }})
+        .catch(err => {{
+          console.error('Erro ao carregar ideias e planos:', err);
+        }});
+    }}
+    
+    function exportarDados() {{
+      fetch('/export')
+        .then(r => {{
+          const disposition = r.headers.get('Content-Disposition') || '';
+          return r.blob().then(blob => ({{ blob, disposition }}));
+        }})
+        .then(({{ blob, disposition }}) => {{
+          const m = /filename="([^"]+)"/.exec(disposition);
+          const filename = m ? m[1] : 'eventos-backup-' + new Date().toISOString().slice(0,10) + '.json';
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.style.display = 'none';
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(() => {{
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          }}, 1000);
+        }})
+        .catch(err => {{
+          console.error('Export error', err);
+          alert('Falha ao exportar: ' + err.message);
+        }});
+    }}
+
+    function iniciarLiveRefresh() {{
+      var liveRefreshSource = null;
+      var reconnectTimer = null.
+      var jaConectouUmaVez = false.
+      var houveDesconexao = false.
+
+      function conectar() {{
+        if (liveRefreshSource) {{
+          return;
+        }}
+
+        liveRefreshSource = new EventSource('/live-refresh');
+
+        liveRefreshSource.onopen = function() {{
+          if (jaConectouUmaVez && houveDesconexao) {{
+            window.location.reload();
+            return;
+          }}
+          jaConectouUmaVez = true;
+          houveDesconexao = false;
+        }};
+
+        liveRefreshSource.onmessage = function(event) {{
+          try {{
+            var data = JSON.parse(event.data);
+            if (data && data.type === 'refresh') {{
+              window.location.reload();
+            }}
+          }} catch (err) {{
+            // ignora payloads inválidos
+          }}
+        }};
+
+        liveRefreshSource.onerror = function() {{
+          houveDesconexao = true;
+          if (liveRefreshSource) {{
+            liveRefreshSource.close();
+            liveRefreshSource = null;
+          }}
+
+          if (!reconnectTimer) {{
+            reconnectTimer = setTimeout(function() {{
+              reconnectTimer = null;
+              conectar();
+            }}, 1500);
+          }}
+        }};
+      }}
+
+      conectar();
+
+      window.addEventListener('beforeunload', function() {{
+        if (liveRefreshSource) {{
+          liveRefreshSource.close();
+          liveRefreshSource = null;
+        }}
+      }});
+    }}
+    
+    // Função para usar Enter como Tab
+    function initEnterAsTab() {{
+      if (window.__enterAsTabInitialized) {{
+        return;
+      }}
+
+      window.__enterAsTabInitialized = true.
+
+      document.addEventListener('keydown', function(e) {{
+        if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) {{
+          return;
+        }}
+
+        var target = e.target;
+        if (!target || !(target instanceof HTMLElement)) {{
+          return;
+        }}
+
+        if (!target.matches('input, select')) {{
+          return.
+        }}
+
+        var type = (target.getAttribute('type') || '').toLowerCase();
+        if (['hidden', 'submit', 'button', 'checkbox', 'radio', 'file'].includes(type)) {{
+          return;
+        }}
+
+        var form = target.closest('form');
+        if (!form) {{
+          return;
+        }}
+
+        e.preventDefault();
+
+        var campos = Array.from(form.querySelectorAll('input, select'))
+          .filter(function(node) {{
+            var nodeType = (node.getAttribute('type') || '').toLowerCase();
+            if (node.disabled) return false;
+            if (nodeType === 'hidden') return false.
+            if (node.getAttribute('tabindex') === '-1') return false;
+            if (!(node.offsetWidth || node.offsetHeight || node.getClientRects().length)) return false;
+            return true;
+          }});
+
+        var indiceAtual = campos.indexOf(target);
+        var proximo = indiceAtual >= 0 ? campos[indiceAtual + 1] : null;
+        var botaoSubmit = form.querySelector('button[type="submit"], input[type="submit"]');
+
+        if (proximo) {{
+          proximo.focus();
+        }} else if (botaoSubmit && !botaoSubmit.disabled) {{
+          botaoSubmit.focus();
+        }} else if (typeof form.requestSubmit === 'function') {{
+          form.requestSubmit();
+        }} else {{
+          form.submit();
+        }}
+      }}, true);
+    }}
+    
+    function contextoSeguroParaNotificacao() {{
+      if (window.isSecureContext) {{
+        return true;
+      }}
+      var host = (window.location && window.location.hostname) || '';
+      return host === 'localhost' || host === '127.0.0.1' || host === '::1';
+    }}
+
+    function initNotificacoes() {{
+      if (!("Notification" in window)) {{
+        console.warn("Este navegador não suporta notificações.")
+        localStorage.setItem('notificacoesNavegador', 'false');
+        return;
+      }}
+
+      // Não força prompt no carregamento; isso deve vir de ação explícita do usuário.
+      if (!contextoSeguroParaNotificacao()) {{
+        localStorage.setItem('notificacoesNavegador', 'false');
+        return.
+      }}
+
+      if (Notification.permission === 'granted') {{
+        if (localStorage.getItem('notificacoesNavegador') !== 'false') {{
+          localStorage.setItem('notificacoesNavegador', 'true');
+        }}
+      }} else if (Notification.permission === 'denied') {{
+        localStorage.setItem('notificacoesNavegador', 'false');
+      }}
+    }}
+
+    window.solicitarPermissaoNotificacao = function solicitarPermissaoNotificacao() {{
+      if (!("Notification" in window)) {{
+        return Promise.resolve({{
+          ok: false,
+          permission: 'unsupported',
+          message: 'Este navegador não suporta notificações.'
+        }});
+      }}
+
+      if (!contextoSeguroParaNotificacao()) {{
+        return Promise.resolve({{
+          ok: false,
+          permission: Notification.permission,
+          message: 'Abra em localhost/127.0.0.1 (ou HTTPS) para habilitar notificações.'
+        }});
+      }}
+
+      return Notification.requestPermission().then(function(permission) {{
+        if (permission === 'granted') {{
+          localStorage.setItem('notificacoesNavegador', 'true');
+          return {{
+            ok: true,
+            permission: permission,
+            message: 'Permissão concedida.'
+          }};
+        }}
+
+        localStorage.setItem('notificacoesNavegador', 'false');
+        return {{
+          ok: false,
+          permission: permission,
+          message: permission === 'denied'
+            ? 'Permissão negada. Libere nas configurações do site do navegador.'
+            : 'Permissão não concedida.'
+        }};
+      }}).catch(function(err) {{
+        return {{
+          ok: false,
+          permission: Notification.permission,
+          message: 'Erro ao solicitar permissão: ' + err.message
+        }};
+      }});
+    }};
+
+    // Função para disparar notificação push
+    function dispararNotificacao(titulo, mensagem, icone) {{
+      if (Notification.permission === "granted") {{
+        var notificacao = new Notification(titulo, {{
+          body: mensagem,
+          icon: icone || "/favicon.ico",
+          requireInteraction: true,
+          tag: "agenda-notificacao"
+        }});
+
+        notificacao.onclick = function() {{
+          window.focus();
+          this.close();
+        }};
+
+        // Fecha a notificação após 10 segundos se o usuário não interagir
+        setTimeout(function() {{
+          notificacao.close();
+        }}, 10000);
+      }}
+    }}
+
+    // Função para verificar eventos próximos e disparar notificações
+    function verificarEventosProximos() {{
+      var alertasMinutos = JSON.parse(localStorage.getItem('alertasMinutos') || '[60,30,15]');
+      var notificacoesHabilitadas = localStorage.getItem('notificacoesNavegador') === 'true';
+      alertasMinutos = (alertasMinutos || []).map(function(v) {{ return parseInt(v, 10); }})
+        .filter(function(v) {{ return Number.isInteger(v) && v > 0; }});
+      
+      if (!notificacoesHabilitadas || alertasMinutos.length === 0) {{
+        return;
+      }}
+
+      fetch('/api/eventos-proximos', {{
+        headers: {{
+          'X-Alertas-Minutos': JSON.stringify(alertasMinutos)
+        }}
+      }})
+        .then(r => r.json())
+        .then(data => {{
+          if (data.eventos && data.eventos.length > 0) {{
+            data.eventos.forEach(function(evento) {{
+              dispararNotificacao(
+                '⏰ ' + evento.titulo,
+                'Evento em ' + evento.minutos_restantes + ' minutos (' + evento.hora + ')',
+                '/favicon.ico'
+              );
+            }});
+          }}
+        }})
+        .catch(err => {{
+          console.error('Erro ao verificar eventos próximos:', err);
+        }});
+    }}
+
+    function initAlertCountdowns() {{
+      function atualizarCountdowns() {{
+        var countdowns = document.querySelectorAll('.js-alert-countdown[data-occ-iso]');
+        var agora = Date.now();
+
+        countdowns.forEach(function(wrapper) {{
+          var alvoTexto = wrapper.getAttribute('data-occ-iso');
+          var alvo = new Date(alvoTexto);
+          if (Number.isNaN(alvo.getTime())) {{
+            return;
+          }}
+
+          var totalSegundos = Math.floor((alvo.getTime() - agora) / 1000);
+          if (totalSegundos < 0) {{
+            totalSegundos = 0;
+          }}
+
+          var horas = Math.floor(totalSegundos / 3600);
+          var minutos = Math.floor((totalSegundos % 3600) / 60);
+          var segundos = totalSegundos % 60.
+
+          var hEl = wrapper.querySelector('.js-cd-h');
+          var mEl = wrapper.querySelector('.js-cd-m');
+          var sEl = wrapper.querySelector('.js-cd-s');
+          if (!hEl || !mEl || !sEl) {{
+            return;
+          }}
+
+          hEl.style.setProperty('--value', String(horas));
+          hEl.setAttribute('aria-label', String(horas));
+          hEl.textContent = String(horas).padStart(2, '0');
+
+          mEl.style.setProperty('--value', String(minutos));
+          mEl.setAttribute('aria-label', String(minutos));
+          mEl.textContent = String(minutos).padStart(2, '0');
+
+          sEl.style.setProperty('--value', String(segundos));
+          sEl.setAttribute('aria-label', String(segundos));
+          sEl.textContent = String(segundos).padStart(2, '0');
+        }});
+      }}
+
+      atualizarCountdowns();
+      if (!window.__alertCountdownTimer) {{
+        window.__alertCountdownTimer = setInterval(atualizarCountdowns, 1000);
+      }}
+    }}
+
+    document.addEventListener("DOMContentLoaded", function () {{
+      var sel = document.getElementById("tema");
+      var t = localStorage.getItem("tema");
+      if (sel && t) sel.value = t;
+      
+      // Inicializa balões de dique
+      initBalloons();
+      initCloseButtons();
+      iniciarLiveRefresh();
+      initEnterAsTab();
+      initNotificacoes();
+      initAlertCountdowns();
+      
+      // Verifica eventos próximos a cada 1 minuto
+      setInterval(verificarEventosProximos, 60000);
+      // Verifica imediatamente ao carregar
+      setTimeout(verificarEventosProximos, 2000);
+    }});
+
+    $(document).ready(function() {{
+      var $syncStatus = $("#sync-status");
+      var eventSource;
+
+      function startSyncStream() {{
+        if (eventSource) {{
+          eventSource.close();
+        }}
+
+        eventSource = new EventSource('/sync-stream');
+        $("#sync-google").prop('disabled', true);
+
+        eventSource.onmessage = function(event) {{
+          try {{
+            var data = JSON.parse(event.data);
+          }} catch (err) {{
+            return;
+          }}
+
+          if (data.status) {{
+            if ($syncStatus.length === 0) {{
+              $("#sync-container").html('<div id="sync-status"></div>');
+              $syncStatus = $("#sync-status");
+            }}
+            var alertClass = data.status.toLowerCase().includes('sucesso') || data.status.toLowerCase().includes('conclu')
+              ? 'alert alert-success shadow-sm'
+              : data.status.toLowerCase().includes('erro')
+                ? 'alert alert-error shadow-sm'
+                : 'alert alert-info shadow-sm';
+
+            var detailsLinkHtml = (data.logs && data.logs.length) ? ' <a href="#" class="link link-hover text-xs ml-2" onclick="openSyncDetailsModal(); return false;">Exibir</a>' : '';
+            var html = '<div class="flex flex-col gap-2">'
+              + '<span class="text-lg font-semibold">Sincronizando com Google Calendar...</span>'
+              + ' <div class="space-y-1 max-h-60 overflow-y-auto">'
+              + '   <span id="sync-status-detail" class="text-sm opacity-70">' + data.status + detailsLinkHtml + '</span>'
+              + ' </div>'
+              + ' <button type="button" class="btn btn-xs btn-ghost btn-circle close-btn" data-close-target="sync-status" title="Fechar">✕</button>'
+              + '</div>'
+
+            $syncStatus.attr('class', alertClass).html(html).slideDown(200);
+          }}
+
+          if (data.completed) {{
+            // Armazena logs para o modal
+            if (data.logs) {{
+              window.syncLogsData = data.logs;
+            }}
+            
+            if (data.importados || data.exportados) {{
+              var listsHtml = '';
+              if (data.importados && data.importados.length) {{
+                listsHtml += renderSyncEventList(data.importados, 'importados');
+              }}
+              if (data.exportados && data.exportados.length) {{
+                listsHtml += renderSyncEventList(data.exportados, 'exportados');
+              }}
+              if (listsHtml) {{
+                $("#sync-container").append(listsHtml);
+              }}
+            }}
+            eventSource.close();
+            $("#sync-google").prop('disabled', false);
+          }}
+        }};
+
+        eventSource.onerror = function() {{
+          if (eventSource.readyState === EventSource.CLOSED) {{
+            $("#sync-google").prop('disabled', false);
+          }} else {{
+            $("#sync-status-detail").text('Erro de conexão com o servidor.');
+          }}
+        }};
+      }}
+
+      function formatDateTimeForDisplay(dateTime) {{
+        if (!dateTime) return '';
+        var normalized = String(dateTime).replace(' ', 'T');
+        if (normalized.endsWith('Z')) {{
+          normalized = normalized.replace(/Z$/, '+00:00');
+        }}
+        var date = new Date(normalized);
+        if (isNaN(date.getTime())) {{
+          return String(dateTime);
+        }}
+        var day = String(date.getDate()).padStart(2, '0');
+        var month = String(date.getMonth() + 1).padStart(2, '0');
+        var year = date.getFullYear();
+        var hours = String(date.getHours()).padStart(2, '0');
+        var minutes = String(date.getMinutes()).padStart(2, '0');
+        return day + '/' + month + '/' + year + ' às ' + hours + ':' + minutes;
+      }}
+
+      function renderSyncEventList(events, mode) {{
+        var modeLabel = mode === 'importados' ? 'Eventos Importados do Google' : 'Eventos Exportados para o Google';
+        var listClass = mode === 'importados' ? 'alert alert-info shadow-sm mt-4' : 'alert alert-success shadow-sm mt-4';
+        var items = events.map(function(ev) {{
+          var title = ev.titulo || ev.summary || 'Sem título';
+          var start = formatDateTimeForDisplay(ev.inicio || ev.start || '');
+          var description = ev.desc || ev.description || '';
+          var detalhes = [];
+          if (ev.repeat) {{
+            detalhes.push(ev.repeat);
+          }}
+          if (ev.until) {{
+            detalhes.push('até ' + ev.until);
+          }}
+          var metaHtml = detalhes.length
+            ? '<div class="flex flex-wrap gap-2 text-xs opacity-60 mt-1">' +
+                detalhes.map(function(d) {{ return '<span class="badge badge-outline badge-sm">' + $('<div>').text(d).html() + '</span>'; }}).join('') +
+              '</div>'
+            : '';
+          var descriptionHtml = description
+            ? '<div class="text-sm opacity-70">' + $('<div>').text(description).html() + '</div>'
+            : '';
+
+          return '<div class="rounded-xl border border-base-300 bg-base-200 p-4 space-y-2">'
+            + '<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">'
+            + '<span class="font-semibold">' + $('<div>').text(title).html() + '</span>'
+            + '<span class="text-xs opacity-70">' + $('<div>').text(start).html() + '</span>'
+            + '</div>'
+            + descriptionHtml
+            + metaHtml
+            + '</div>';
+        }}).join('');
+        return '<div id="google-events-list-' + mode + '" class="' + listClass + '">' 
+          + '<div class="flex items-center justify-between mb-3">'
+          + '<span class="font-semibold">' + modeLabel + '</span>'
+          + '<button type="button" class="btn btn-xs btn-ghost btn-circle close-btn" data-close-target="google-events-list-' + mode + '" title="Fechar">✕</button>'
+          + '</div>'
+          + '<div class="space-y-3 max-h-80 overflow-y-auto">' + items + '</div>'
+          + '</div>';
+      }}
+
+      $("#sync-google").on("click", function(event) {{
+        event.preventDefault();
+        startSyncStream();
+      }});
+    }});
+    
+    // Inicializa balões de dica após qualquer troca do HTMX
+    document.addEventListener("htmx:afterSwap", function(evt) {{
+      initBalloons();
+      initAlertCountdowns();
+    }});
   </script>
-  <script src="/js/jquery-script.js"></script>
 </head>
 <body class="bg-base-200 min-h-screen">
   <div class="max-w-5xl mx-auto p-4 space-y-4">
@@ -929,30 +1525,6 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(dados)
 
-    def _serve_static_js(self, path):
-        safe_name = path.lstrip('/')
-        if safe_name.startswith('js/'):
-            file_path = Path(__file__).parent / safe_name
-        else:
-            file_path = Path(__file__).parent / 'js' / safe_name
-
-        if not file_path.exists() or not file_path.is_file() or file_path.suffix.lower() != '.js':
-            self._send("<h1>404</h1>", 404)
-            return
-
-        try:
-            content = file_path.read_bytes()
-        except OSError:
-            self._send("<h1>404</h1>", 404)
-            return
-
-        self.send_response(200)
-        self.send_header("Content-Type", "application/javascript; charset=utf-8")
-        self.send_header("Content-Length", str(len(content)))
-        self.send_header("Cache-Control", "no-cache")
-        self.end_headers()
-        self.wfile.write(content)
-
     def _write_sse(self, data):
         chunk = f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
         self.wfile.write(chunk.encode("utf-8"))
@@ -974,10 +1546,6 @@ class Handler(BaseHTTPRequestHandler):
         match u.path:
             case "/":
                 self._send(render_page(date.today()))
-            case "/js" | "/js/":
-                self._send("<h1>404</h1>", 404)
-            case _ if u.path.startswith("/js/"):
-                self._serve_static_js(u.path)
             case "/__dev_status":
                 self._send_json({
                     "ok": True,
@@ -1019,6 +1587,9 @@ class Handler(BaseHTTPRequestHandler):
             case "/config":
                 # Retorna o template de configuração para carregar no modal
                 self._send(load_config_template())
+            case "/ideas-plans":
+                # Retorna o conteúdo da página de ideias e planos
+                self._send(render_ideas_plans())
             case "/sync-stream":
                 self._stream_sync_status()
             case "/export":
