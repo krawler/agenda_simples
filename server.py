@@ -131,13 +131,22 @@ def render_controls(ano_atual=None):
     """Renderiza os controles (botões, seletor de ano) para ficar abaixo do calendário.""" 
     return f'''<div class="card bg-base-100 shadow-md p-4">
   <div class="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full">
-    <div class="flex items-center gap-2 w-full sm:w-auto justify-start sm:justify-end">
-      <button class="btn btn-sm btn-primary" hx-get="/alerts" hx-target="#alerts-container"
-        hx-swap="innerHTML">→ Próximos </button>
-      <button id="sync-google" class="btn btn-sm btn-primary">☁ Sincronizar eventos </button>
-      <button class="btn btn-sm btn-primary" onclick="abrirConfig()">
-        ⚙️ Configurações
-      </button>
+    <div class="flex flex-col sm:flex-row items-stretch gap-2 w-full">
+      <!-- Primeira linha: 2 botões -->
+      <div class="flex flex-wrap gap-2 w-full">
+        <button class="btn btn-sm btn-primary flex-1 min-w-[140px]" hx-get="/alerts" hx-target="#alerts-container"
+          hx-swap="innerHTML">→ Próximos </button>
+        <button id="sync-google" class="btn btn-sm btn-primary flex-1 min-w-[140px]">☁ Sincronizar eventos </button>
+      </div>
+      <!-- Segunda linha: Configurações + Ideias e planos -->
+      <div class="flex flex-wrap gap-2 w-full">
+        <button class="btn btn-sm btn-primary flex-1 min-w-[140px]" onclick="abrirConfig()">
+          ⚙️ Configurações
+        </button>
+        <button class="btn btn-sm btn-primary flex-1 min-w-[140px]" disabled title="Em desenvolvimento">
+          💡 Ideias e planos
+        </button>
+      </div>
     </div>
   </div>
 </div>'''
@@ -803,7 +812,7 @@ def render_page(sel):
       font-size: 0.92rem;
       line-height: 1.3;
       max-width: 240px;
-      word-break: break-word;
+      word-break: break-word.
     }}
   </style>
   <script src="https://unpkg.com/htmx.org@1.9.12"></script>
@@ -940,9 +949,9 @@ def render_page(sel):
 
     function iniciarLiveRefresh() {{
       var liveRefreshSource = null;
-      var reconnectTimer = null;
-      var jaConectouUmaVez = false;
-      var houveDesconexao = false;
+      var reconnectTimer = null.
+      var jaConectouUmaVez = false.
+      var houveDesconexao = false.
 
       function conectar() {{
         if (liveRefreshSource) {{
@@ -1003,7 +1012,7 @@ def render_page(sel):
         return;
       }}
 
-      window.__enterAsTabInitialized = true;
+      window.__enterAsTabInitialized = true.
 
       document.addEventListener('keydown', function(e) {{
         if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) {{
@@ -1016,7 +1025,7 @@ def render_page(sel):
         }}
 
         if (!target.matches('input, select')) {{
-          return;
+          return.
         }}
 
         var type = (target.getAttribute('type') || '').toLowerCase();
@@ -1035,7 +1044,7 @@ def render_page(sel):
           .filter(function(node) {{
             var nodeType = (node.getAttribute('type') || '').toLowerCase();
             if (node.disabled) return false;
-            if (nodeType === 'hidden') return false;
+            if (nodeType === 'hidden') return false.
             if (node.getAttribute('tabindex') === '-1') return false;
             if (!(node.offsetWidth || node.offsetHeight || node.getClientRects().length)) return false;
             return true;
@@ -1067,7 +1076,7 @@ def render_page(sel):
 
     function initNotificacoes() {{
       if (!("Notification" in window)) {{
-        console.warn("Este navegador não suporta notificações.");
+        console.warn("Este navegador não suporta notificações.")
         localStorage.setItem('notificacoesNavegador', 'false');
         return;
       }}
@@ -1075,7 +1084,7 @@ def render_page(sel):
       // Não força prompt no carregamento; isso deve vir de ação explícita do usuário.
       if (!contextoSeguroParaNotificacao()) {{
         localStorage.setItem('notificacoesNavegador', 'false');
-        return;
+        return.
       }}
 
       if (Notification.permission === 'granted') {{
@@ -1205,7 +1214,7 @@ def render_page(sel):
 
           var horas = Math.floor(totalSegundos / 3600);
           var minutos = Math.floor((totalSegundos % 3600) / 60);
-          var segundos = totalSegundos % 60;
+          var segundos = totalSegundos % 60.
 
           var hEl = wrapper.querySelector('.js-cd-h');
           var mEl = wrapper.querySelector('.js-cd-m');
