@@ -105,6 +105,12 @@
             <span class="label-text">Notificações do navegador (requer permissão)</span>
             <input type="checkbox" class="checkbox checkbox-primary" id="notificacoes-navegador">
           </label>
+          <div class="flex items-center gap-2 mt-1">
+            <button type="button" class="btn btn-xs btn-outline" id="btn-solicitar-permissao-notificacao">
+              Solicitar permissão
+            </button>
+            <span id="status-permissao-notificacao" class="text-xs opacity-70"></span>
+          </div>
         </div>
       </div>
     </section>
@@ -219,10 +225,92 @@
   document.addEventListener('DOMContentLoaded', function() {
     carregarConfiguracoes();
     initBalloons();
+    inicializarPermissaoNotificacaoUI();
     if (typeof initEnterAsTab === 'function') {
       initEnterAsTab();
     }
   });
+
+  function atualizarStatusPermissaoNotificacao() {
+    const statusEl = document.getElementById('status-permissao-notificacao');
+    const checkboxEl = document.getElementById('notificacoes-navegador');
+    const btnEl = document.getElementById('btn-solicitar-permissao-notificacao');
+    if (!statusEl || !checkboxEl || !btnEl) return;
+
+    if (!('Notification' in window)) {
+      statusEl.textContent = 'Navegador sem suporte a notificações.';
+      statusEl.className = 'text-xs text-error';
+      checkboxEl.checked = false;
+      checkboxEl.disabled = true;
+      btnEl.disabled = true;
+      localStorage.setItem('notificacoesNavegador', 'false');
+      return;
+    }
+
+    const host = window.location.hostname;
+    const contextoSeguro = window.isSecureContext || host === 'localhost' || host === '127.0.0.1' || host === '::1';
+    if (!contextoSeguro) {
+      statusEl.textContent = 'Use localhost/127.0.0.1 (ou HTTPS) para pedir permissão.';
+      statusEl.className = 'text-xs text-warning';
+      checkboxEl.checked = false;
+      checkboxEl.disabled = true;
+      btnEl.disabled = true;
+      localStorage.setItem('notificacoesNavegador', 'false');
+      return;
+    }
+
+    checkboxEl.disabled = false;
+    btnEl.disabled = false;
+
+    if (Notification.permission === 'granted') {
+      statusEl.textContent = 'Permissão concedida.';
+      statusEl.className = 'text-xs text-success';
+      checkboxEl.checked = localStorage.getItem('notificacoesNavegador') !== 'false';
+    } else if (Notification.permission === 'denied') {
+      statusEl.textContent = 'Permissão negada no navegador. Reative em Configurações do Site (ícone de cadeado na barra de endereço).';
+      statusEl.className = 'text-xs text-error';
+      checkboxEl.checked = false;
+      localStorage.setItem('notificacoesNavegador', 'false');
+    } else {
+      statusEl.textContent = 'Permissão pendente.';
+      statusEl.className = 'text-xs opacity-70';
+      checkboxEl.checked = false;
+    }
+  }
+
+  function inicializarPermissaoNotificacaoUI() {
+    const checkboxEl = document.getElementById('notificacoes-navegador');
+    const btnEl = document.getElementById('btn-solicitar-permissao-notificacao');
+    if (!checkboxEl || !btnEl) return;
+
+    if (!checkboxEl.dataset.permissionBinded) {
+      checkboxEl.dataset.permissionBinded = 'true';
+      checkboxEl.addEventListener('change', async function() {
+        if (!checkboxEl.checked) {
+          localStorage.setItem('notificacoesNavegador', 'false');
+          atualizarStatusPermissaoNotificacao();
+          return;
+        }
+
+        if (typeof window.solicitarPermissaoNotificacao === 'function') {
+          await window.solicitarPermissaoNotificacao();
+        }
+        atualizarStatusPermissaoNotificacao();
+      });
+    }
+
+    if (!btnEl.dataset.permissionBinded) {
+      btnEl.dataset.permissionBinded = 'true';
+      btnEl.addEventListener('click', async function() {
+        if (typeof window.solicitarPermissaoNotificacao === 'function') {
+          await window.solicitarPermissaoNotificacao();
+        }
+        atualizarStatusPermissaoNotificacao();
+      });
+    }
+
+    atualizarStatusPermissaoNotificacao();
+  }
 
   // Carrega configurações do localStorage
   function carregarConfiguracoes() {
@@ -244,7 +332,17 @@
     });
     
     document.getElementById('som-alertas').checked = localStorage.getItem('somAlertas') !== 'false';
-    document.getElementById('notificacoes-navegador').checked = localStorage.getItem('notificacoesNavegador') === 'true';
+    if (!('Notification' in window)) {
+      document.getElementById('notificacoes-navegador').checked = false;
+      localStorage.setItem('notificacoesNavegador', 'false');
+    } else if (Notification.permission === 'granted') {
+      document.getElementById('notificacoes-navegador').checked = localStorage.getItem('notificacoesNavegador') !== 'false';
+    } else {
+      document.getElementById('notificacoes-navegador').checked = false;
+      if (Notification.permission === 'denied') {
+        localStorage.setItem('notificacoesNavegador', 'false');
+      }
+    }
     
     // Google Calendar
     document.getElementById('sync-auto').checked = localStorage.getItem('syncAuto') !== 'false';
@@ -257,6 +355,7 @@
     // Avançado
     document.getElementById('modo-debug').checked = localStorage.getItem('modoDebug') === 'true';
     document.getElementById('compactar-eventos').checked = localStorage.getItem('compactarEventos') === 'true';
+    atualizarStatusPermissaoNotificacao();
   }
 
   // Salva configurações no localStorage
