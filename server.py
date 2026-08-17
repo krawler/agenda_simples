@@ -1057,22 +1057,79 @@ def render_page(sel):
       }}, true);
     }}
     
-    // Função para solicitar permissão de notificação e disparar notificações
+    function contextoSeguroParaNotificacao() {{
+      if (window.isSecureContext) {{
+        return true;
+      }}
+      var host = (window.location && window.location.hostname) || '';
+      return host === 'localhost' || host === '127.0.0.1' || host === '::1';
+    }}
+
     function initNotificacoes() {{
       if (!("Notification" in window)) {{
         console.warn("Este navegador não suporta notificações.");
+        localStorage.setItem('notificacoesNavegador', 'false');
         return;
       }}
 
-      // Solicita permissão se ainda não concedida
-      if (Notification.permission === "default") {{
-        Notification.requestPermission().then(function(permission) {{
-          if (permission === "granted") {{
-            console.log("Permissão de notificação concedida.");
-          }}
-        }});
+      // Não força prompt no carregamento; isso deve vir de ação explícita do usuário.
+      if (!contextoSeguroParaNotificacao()) {{
+        localStorage.setItem('notificacoesNavegador', 'false');
+        return;
+      }}
+
+      if (Notification.permission === 'granted') {{
+        if (localStorage.getItem('notificacoesNavegador') !== 'false') {{
+          localStorage.setItem('notificacoesNavegador', 'true');
+        }}
+      }} else if (Notification.permission === 'denied') {{
+        localStorage.setItem('notificacoesNavegador', 'false');
       }}
     }}
+
+    window.solicitarPermissaoNotificacao = function solicitarPermissaoNotificacao() {{
+      if (!("Notification" in window)) {{
+        return Promise.resolve({{
+          ok: false,
+          permission: 'unsupported',
+          message: 'Este navegador não suporta notificações.'
+        }});
+      }}
+
+      if (!contextoSeguroParaNotificacao()) {{
+        return Promise.resolve({{
+          ok: false,
+          permission: Notification.permission,
+          message: 'Abra em localhost/127.0.0.1 (ou HTTPS) para habilitar notificações.'
+        }});
+      }}
+
+      return Notification.requestPermission().then(function(permission) {{
+        if (permission === 'granted') {{
+          localStorage.setItem('notificacoesNavegador', 'true');
+          return {{
+            ok: true,
+            permission: permission,
+            message: 'Permissão concedida.'
+          }};
+        }}
+
+        localStorage.setItem('notificacoesNavegador', 'false');
+        return {{
+          ok: false,
+          permission: permission,
+          message: permission === 'denied'
+            ? 'Permissão negada. Libere nas configurações do site do navegador.'
+            : 'Permissão não concedida.'
+        }};
+      }}).catch(function(err) {{
+        return {{
+          ok: false,
+          permission: Notification.permission,
+          message: 'Erro ao solicitar permissão: ' + err.message
+        }};
+      }});
+    }};
 
     // Função para disparar notificação push
     function dispararNotificacao(titulo, mensagem, icone) {{
@@ -1100,12 +1157,18 @@ def render_page(sel):
     function verificarEventosProximos() {{
       var alertasMinutos = JSON.parse(localStorage.getItem('alertasMinutos') || '[60,30,15]');
       var notificacoesHabilitadas = localStorage.getItem('notificacoesNavegador') === 'true';
+      alertasMinutos = (alertasMinutos || []).map(function(v) {{ return parseInt(v, 10); }})
+        .filter(function(v) {{ return Number.isInteger(v) && v > 0; }});
       
-      if (!notificacoesHabilitadas) {{
+      if (!notificacoesHabilitadas || alertasMinutos.length === 0) {{
         return;
       }}
 
-      fetch('/api/eventos-proximos')
+      fetch('/api/eventos-proximos', {{
+        headers: {{
+          'X-Alertas-Minutos': JSON.stringify(alertasMinutos)
+        }}
+      }})
         .then(r => r.json())
         .then(data => {{
           if (data.eventos && data.eventos.length > 0) {{
@@ -1586,29 +1649,33 @@ class Handler(BaseHTTPRequestHandler):
     def _api_eventos_proximos(self):
         """API para retornar eventos próximos para notificações push."""
         agora = datetime.now()
-        max_min = max(agenda.ALERTAS_MIN)
+
+        alertas_minutos = [60, 30, 15]
+        try:
+            bruto = json.loads(self.headers.get('X-Alertas-Minutos', '[60,30,15]'))
+            if isinstance(bruto, list):
+                filtrados = [int(v) for v in bruto if int(v) > 0]
+                if filtrados:
+                    alertas_minutos = sorted(set(filtrados), reverse=True)
+        except Exception:
+            pass
+
+        max_min = max(alertas_minutos)
         eventos_proximos = agenda.expandir(agenda.carregar(), agora, agora + timedelta(minutes=max_min))
-        
+
         eventos_list = []
+        alertas_set = set(alertas_minutos)
         for occ, e in eventos_proximos:
             faltam = int((occ - agora).total_seconds() // 60)
-            # Verifica se este evento está dentro de uma das janelas de alerta configuradas
-            alertas_minutos = [60, 30, 15]  # Valores padrão
-            try:
-                alertas_minutos = json.loads(
-                    self.headers.get('X-Alertas-Minutos', '[60,30,15]')
-                )
-            except:
-                pass
-            
-            if any(faltam <= am for am in alertas_minutos):
+
+            # Dispara apenas nos marcos exatos configurados (ex: 60, 30, 15).
+            if faltam in alertas_set:
                 eventos_list.append({
                     "titulo": e["titulo"],
                     "minutos_restantes": faltam,
                     "hora": occ.strftime("%H:%M"),
                     "id": e["id"]
                 })
-        
         self._send_json({"eventos": eventos_list})
 
     def _criar_evento(self, form):
