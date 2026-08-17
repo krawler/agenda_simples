@@ -138,13 +138,13 @@ def render_controls(ano_atual=None):
           hx-swap="innerHTML">→ Próximos </button>
         <button id="sync-google" class="btn btn-sm btn-primary flex-1 min-w-[140px]">☁ Sincronizar eventos </button>
       </div>
-      <!-- Segunda linha: Configurações + Ideias e planos -->
+      <!-- Segunda linha: Ideias e planos + Configurações -->
       <div class="flex flex-wrap gap-2 w-full">
-        <button class="btn btn-sm btn-primary flex-1 min-w-[140px]" onclick="abrirConfig()">
-          ⚙️ Configurações
-        </button>
         <button id="ideas-plans" class="btn btn-sm btn-primary flex-1 min-w-[140px]" onclick="abrirIdeiasPlanos()">
           💡 Ideias e planos
+        </button>
+        <button class="btn btn-sm btn-primary flex-1 min-w-[140px]" onclick="abrirConfig()">
+          ⚙️ Configurações
         </button>
       </div>
     </div>
