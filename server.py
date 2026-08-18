@@ -135,7 +135,7 @@ def render_controls(ano_atual=None):
       <!-- Primeira linha: 2 botões -->
       <div class="flex flex-wrap gap-2 w-full">
         <button class="btn btn-sm btn-primary flex-1 min-w-[140px]" hx-get="/alerts" hx-target="#alerts-container"
-          hx-swap="innerHTML">→ Próximos </button>
+          hx-swap="innerHTML">→ Próximos eventos </button>
         <button id="sync-google" class="btn btn-sm btn-primary flex-1 min-w-[140px]">☁ Sincronizar eventos </button>
       </div>
       <!-- Segunda linha: Ideias e planos + Configurações -->
@@ -783,24 +783,184 @@ def load_config_template():
         return template_path.read_text(encoding="utf-8")
     return "<div class='alert alert-error'>Template config.htm não encontrado</div>"
 
+def render_planos_ideias():
+    return '''<div class="join">
+                <div>
+                  <div style="min-width: 50rem;">
+                    <input class="input join-item" type="text" style="width: 100%;"
+                    placeholder="Qual sua nova idéia ou plano?"  />
+                  </div>
+                </div>
+                <select class="select join-item">
+                  <option disabled selected>Tipo</option>
+                  <option>Idéia</option>
+                  <option>Plano</option>
+                  <option>Tarefa</option>
+                </select>
+                <div class="indicator">
+                  <button class="btn join-item">Adicionar</button>
+                </div>
+              </div>'''
 
-def render_ideas_plans():
-    """Renderiza a página de ideias e planos."""
-    return f'''<div id="ideas-plans-panel" class="card bg-base-100 shadow-md">
-  <div class="card-body p-4">
-    <h2 class="text-lg font-bold">💡 Ideias e Planos</h2>
-    <div class="space-y-4">
-      <div class="alert alert-info shadow-sm">
-        <div class="flex items-center gap-2">
-          <span class="opacity-70">Esta seção está em desenvolvimento. Em breve você poderá visualizar e gerenciar suas ideias e planos aqui.</span>
-        </div>
-      </div>
-      <div class="text-center opacity-50 py-6">
-        Volte em breve para novidades!
-      </div>
-    </div>
-  </div>
-</div>'''
+def render_planos_ideias_table():
+    return '''<div class="w-full my-4">
+                <table class="table">
+                  <!-- head -->
+                  <thead>
+                    <tr>
+                      <th>
+                        <label>
+                          <input type="checkbox" class="checkbox" />
+                        </label>
+                      </th>
+                      <th>Name</th>
+                      <th>Job</th>
+                      <th>Favorite Color</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <!-- row 1 -->
+                    <tr>
+                      <th>
+                        <label>
+                          <input type="checkbox" class="checkbox" />
+                        </label>
+                      </th>
+                      <td>
+                        <div class="flex items-center gap-3">
+                          <div class="avatar">
+                            <div class="mask mask-squircle h-12 w-12">
+                              <img
+                                src="https://img.daisyui.com/images/profile/demo/2@94.webp"
+                                alt="Avatar Tailwind CSS Component" />
+                            </div>
+                          </div>
+                          <div>
+                            <div class="font-bold">Hart Hagerty</div>
+                            <div class="text-sm opacity-50">United States</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        Zemlak, Daniel and Leannon
+                        <br />
+                        <span class="badge badge-ghost badge-sm">Desktop Support Technician</span>
+                      </td>
+                      <td>Purple</td>
+                      <th>
+                        <button class="btn btn-ghost btn-xs">details</button>
+                      </th>
+                    </tr>
+                    <!-- row 2 -->
+                    <tr>
+                      <th>
+                        <label>
+                          <input type="checkbox" class="checkbox" />
+                        </label>
+                      </th>
+                      <td>
+                        <div class="flex items-center gap-3">
+                          <div class="avatar">
+                            <div class="mask mask-squircle h-12 w-12">
+                              <img
+                                src="https://img.daisyui.com/images/profile/demo/3@94.webp"
+                                alt="Avatar Tailwind CSS Component" />
+                            </div>
+                          </div>
+                          <div>
+                            <div class="font-bold">Brice Swyre</div>
+                            <div class="text-sm opacity-50">China</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        Carroll Group
+                        <br />
+                        <span class="badge badge-ghost badge-sm">Tax Accountant</span>
+                      </td>
+                      <td>Red</td>
+                      <th>
+                        <button class="btn btn-ghost btn-xs">details</button>
+                      </th>
+                    </tr>
+                    <!-- row 3 -->
+                    <tr>
+                      <th>
+                        <label>
+                          <input type="checkbox" class="checkbox" />
+                        </label>
+                      </th>
+                      <td>
+                        <div class="flex items-center gap-3">
+                          <div class="avatar">
+                            <div class="mask mask-squircle h-12 w-12">
+                              <img
+                                src="https://img.daisyui.com/images/profile/demo/4@94.webp"
+                                alt="Avatar Tailwind CSS Component" />
+                            </div>
+                          </div>
+                          <div>
+                            <div class="font-bold">Marjy Ferencz</div>
+                            <div class="text-sm opacity-50">Russia</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        Rowe-Schoen
+                        <br />
+                        <span class="badge badge-ghost badge-sm">Office Assistant I</span>
+                      </td>
+                      <td>Crimson</td>
+                      <th>
+                        <button class="btn btn-ghost btn-xs">details</button>
+                      </th>
+                    </tr>
+                    <!-- row 4 -->
+                    <tr>
+                      <th>
+                        <label>
+                          <input type="checkbox" class="checkbox" />
+                        </label>
+                      </th>
+                      <td>
+                        <div class="flex items-center gap-3">
+                          <div class="avatar">
+                            <div class="mask mask-squircle h-12 w-12">
+                              <img
+                                src="https://img.daisyui.com/images/profile/demo/5@94.webp"
+                                alt="Avatar Tailwind CSS Component" />
+                            </div>
+                          </div>
+                          <div>
+                            <div class="font-bold">Yancy Tear</div>
+                            <div class="text-sm opacity-50">Brazil</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        Wyman-Ledner
+                        <br />
+                        <span class="badge badge-ghost badge-sm">Community Outreach Specialist</span>
+                      </td>
+                      <td>Indigo</td>
+                      <th>
+                        <button class="btn btn-ghost btn-xs">details</button>
+                      </th>
+                    </tr>
+                  </tbody>
+                  <!-- foot -->
+                  <tfoot>
+                    <tr>
+                      <th></th>
+                      <th>Name</th>
+                      <th>Job</th>
+                      <th>Favorite Color</th>
+                      <th></th>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>'''
 
 
 def render_page(sel):
@@ -811,6 +971,8 @@ def render_page(sel):
     proximos_html = render_proximos_eventos_dia(sel)
     sync_html = render_sync_status()
     config_modal_html = load_config_template()
+    planos_ideias_html = render_planos_ideias()
+    planos_ideias_table_html = render_planos_ideias_table()
     
     return f'''<!DOCTYPE html>
 <html lang="pt-br" data-theme="light">
@@ -863,6 +1025,10 @@ def render_page(sel):
         {controls_html}
       </div>
       {day_panel_html}
+     <div class="space-y-4"> 
+      {planos_ideias_html}
+      {planos_ideias_table_html} 
+     </div>  
     </div>
     <!-- esse fechamento mantem a div principal centralizada -->
   </div>
