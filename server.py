@@ -16,6 +16,7 @@ import argparse
 import calendar as calmod
 import html
 import json
+import re
 import threading
 import time as time_module
 import os
@@ -75,6 +76,24 @@ def dias_com_eventos(ano, mes):
 # ------------------------------------------------------------------- renderizacao
 def esc(v):
     return html.escape(str(v)) if v is not None else ""
+
+
+def linkify_urls(text):
+    """Converte URLs em texto para links clicáveis."""
+    if not text:
+        return ""
+    # Regex para detectar URLs (http, https, ftp, file, mailto, etc.)
+    url_pattern = re.compile(
+        r'(?i)\b((?:https?://|ftp://|file://|mailto:|www\.)[^\s<>"\']+)'
+    )
+    
+    def replace_url(match):
+        url = match.group(1)
+        # Se não tem protocolo, adiciona http://
+        href = url if re.match(r'^[a-z]+://', url, re.I) else 'http://' + url
+        return f'<a href="{esc(href)}" target="_blank" rel="noopener noreferrer" class="link link-primary underline">{esc(url)}</a>'
+    
+    return url_pattern.sub(replace_url, text)
 
 
 def render_calendar(ano, mes, sel):
@@ -161,7 +180,7 @@ def render_evento_item(occ, e):
     if e.get("repeat"):
         badges += (f'<span class="badge badge-sm badge-outline">'
                    f'{esc(e["repeat"])}</span>')
-    desc = (f'<div class="text-sm opacity-70">{esc(e["desc"])}</div>'
+    desc = (f'<div class="text-sm opacity-70">{linkify_urls(e["desc"])}</div>'
             if e.get("desc") else "")
     iso = occ.date().isoformat()
     editar = (f'hx-get="/edit?id={e["id"]}&date={iso}" '
@@ -548,7 +567,7 @@ def render_google_events_list(google_events, mode="importados"):
             falta_str = f"em {faltam} min"
 
         meta_html = ''.join(f'<span class="badge badge-outline badge-sm">{m}</span>' for m in meta)
-        descricao_html = f'<div class="text-sm opacity-70">{esc(descricao)}</div>' if descricao else ''
+        descricao_html = f'<div class="text-sm opacity-70">{linkify_urls(descricao)}</div>' if descricao else ''
 
         linhas.append(
             f'<div class="rounded-xl border border-base-300 bg-base-200 p-3 space-y-2">'
