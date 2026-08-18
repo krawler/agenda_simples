@@ -802,6 +802,7 @@ def load_config_template():
         return template_path.read_text(encoding="utf-8")
     return "<div class='alert alert-error'>Template config.htm não encontrado</div>"
 
+
 def render_planos_ideias():
     return '''<div class="join">
                 <div>
@@ -820,6 +821,7 @@ def render_planos_ideias():
                   <button class="btn join-item">Adicionar</button>
                 </div>
               </div>'''
+
 
 def render_planos_ideias_table():
     return '''<div class="w-full my-4">
@@ -980,6 +982,14 @@ def render_planos_ideias_table():
                   </tfoot>
                 </table>
               </div>'''
+
+
+def render_ideas_plans():
+    """Renderiza a seção completa de Ideias e Planos (formulário + tabela)."""
+    return f'''<div class="space-y-4">
+      {render_planos_ideias()}
+      {render_planos_ideias_table()}
+    </div>'''
 
 
 def render_page(sel):
