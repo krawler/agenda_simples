@@ -56,9 +56,10 @@ $(document).ready(function() {
 
         var detailsLinkHtml = (data.logs && data.logs.length) ? ' <a href="#" class="link link-hover text-xs ml-2" onclick="openSyncDetailsModal(); return false;">Exibir</a>' : '';
         var interruptLinkHtml = ' <a href="#" class="link link-hover text-xs ml-2" onclick="window.interruptSync(); return false;">Interromper</a>';
-        var html = '<div class="flex items-start justify-between gap-2">'
-                  + '<div class="flex flex-col min-w-0 flex-1">'
-                  + '  <span class="text-lg font-semibold">Sincronizando com Google Calendar...</span>'
+        var html = '<div class="flex flex-wrap contents gap-2">'
+                  + '  <span class="text-lg font-semibold">Sincronizando com Google Calendar:</span>'
+                  + '<div class="space-y-1 max-h-60 overflow-y-auto">'
+                  
                   + '  <span id="sync-status-detail" class="text-sm opacity-70">' + data.status + detailsLinkHtml + interruptLinkHtml + '</span>'
                   + '</div>'
                   + '<button type="button" class="btn btn-xs btn-ghost btn-circle close-btn flex-shrink-0" data-close-target="sync-status" title="Fechar">✕</button>'
