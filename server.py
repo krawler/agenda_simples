@@ -596,7 +596,7 @@ def render_sync_status(status_msg="", detail_msg="", is_loading=False, auto_hide
     """Renderiza o status da sincronização e os dois quadros de eventos."""
     if is_loading:
         return f'''<div id="sync-status" class="alert alert-info shadow-sm mt-4">
-                    <div class="flex flex-col gap-3 p-4">
+                    <div class="flex flex-wrap gap-3 p-4">
                       <div class="flex items-center gap-3">
                         <span class="loading loading-spinner loading-sm"></span>
                         <span class="font-semibold">Sincronizando com Google Calendar...</span>
