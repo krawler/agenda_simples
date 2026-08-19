@@ -285,4 +285,23 @@ $(document).ready(function() {
     event.preventDefault();
     startSyncStream();
   });
+
+  // Enter como Tab no formulário de inserção e edição
+  $(document).on('keydown', '.form-control, input, select, textarea', function(event) {
+    if (event.key === 'Enter' && !event.shiftKey && !event.ctrlKey) {
+      event.preventDefault();
+      var $this = $(this);
+      var $form = $this.closest('form');
+      if (!$form.length) {
+        return;
+      }
+      var $inputs = $form.find('input, select, textarea').not(':disabled');
+      var index = $inputs.index(this);
+      if (index >= 0 && index < $inputs.length - 1) {
+        $inputs.eq(index + 1).focus();
+      } else {
+        $form.find('button[type="submit"]').focus();
+      }
+    }
+  });
 });
