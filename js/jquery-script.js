@@ -55,7 +55,7 @@ $(document).ready(function() {
             : 'alert alert-info shadow-sm';
 
         var detailsLinkHtml = (data.logs && data.logs.length) ? ' <a href="#" class="link link-hover text-xs ml-2" onclick="openSyncDetailsModal(); return false;">Exibir</a>' : '';
-        var interruptLinkHtml = ' <a href="#" class="link link-hover text-xs ml-2" onclick="interruptSync(); return false;">Interromper</a>';
+        var interruptLinkHtml = ' <a href="#" class="link link-hover text-xs ml-2" onclick="window.interruptSync(); return false;">Interromper</a>';
         var html = '<div class="flex items-start justify-between gap-2">'
                   + '<div class="flex flex-col min-w-0 flex-1">'
                   + '  <span class="text-lg font-semibold">Sincronizando com Google Calendar...</span>'
@@ -100,7 +100,7 @@ $(document).ready(function() {
     };
   }
 
-  function interruptSync() {
+  window.interruptSync = function() {
     $.post('/interrupt-sync', function() {
       if (eventSource) {
         eventSource.close();
@@ -110,7 +110,7 @@ $(document).ready(function() {
       var detailsLinkHtml = (window.syncLogsData && window.syncLogsData.length) ? ' <a href="#" class="link link-hover text-xs ml-2" onclick="openSyncDetailsModal(); return false;">Exibir</a>' : '';
       $("#sync-status-detail").html('Sincronização interrompido' + detailsLinkHtml);
     });
-  }
+  };
 
   function formatDateTimeForDisplay(dateTime) {
     if (!dateTime) return '';
