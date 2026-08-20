@@ -1,0 +1,21 @@
+{
+  "collection": "ocorrencias",
+  "schemaVersion": 0,
+  "indexes": [
+    "eventoId",
+    "inicio",
+    "status",
+    "updatedAt"
+  ],
+  "fields": {
+    "id": "string",
+    "eventoId": "string",
+    "inicio": "date-time",
+    "fim": "date-time",
+    "status": "string",
+    "skip": "boolean",
+    "userId": "string",
+    "createdAt": "date-time",
+    "updatedAt": "date-time"
+  }
+}

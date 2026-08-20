@@ -1,0 +1,23 @@
+{
+  "collection": "lembretes",
+  "schemaVersion": 0,
+  "indexes": [
+    "eventoId",
+    "ocorrenciaId",
+    "canal",
+    "enviado",
+    "updatedAt"
+  ],
+  "fields": {
+    "id": "string",
+    "eventoId": "string",
+    "ocorrenciaId": "string",
+    "tipo": "string",
+    "canal": "string",
+    "enviado": "boolean",
+    "enviadoEm": "date-time",
+    "userId": "string",
+    "createdAt": "date-time",
+    "updatedAt": "date-time"
+  }
+}
