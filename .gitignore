@@ -12,3 +12,4 @@ eventos.json
 token.json
 credentials.json
 .agenda_server.pid
+firebase/*
