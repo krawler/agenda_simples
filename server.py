@@ -414,7 +414,7 @@ def render_proximos_eventos_dia(d):
         label = "hoje" if d == hoje else f"{d:%d/%m/%Y}"
         return f'''<div id="proximos-eventos" class="alert alert-warning shadow-sm my-4">
                     <div class="flex items-center justify-between mb-2">
-                      <span class="font-semibold">Próximos eventos de {label} ({len(itens_hoje)}):</span>
+                      <span class="font-semibold" style="margin-top:.2rem">Próximos eventos de {label} ({len(itens_hoje)}):</span>
                     </div>
                     <div class="space-y-1 max-h-60 overflow-y-auto">
                       {linhas}
@@ -803,141 +803,6 @@ def load_config_template():
     return "<div class='alert alert-error'>Template config.htm não encontrado</div>"
 
 
-def render_planos_ideias():
-    return '''<div class="join">
-                <div>
-                  <div style="min-width: 50rem;">
-                    <input class="input join-item" type="text" style="width: 100%;"
-                    placeholder="Qual sua nova idéia ou plano?"  />
-                  </div>
-                </div>
-                <select class="select join-item">
-                  <option disabled selected>Tipo</option>
-                  <option>Idéia</option>
-                  <option>Plano</option>
-                  <option>Tarefa</option>
-                </select>
-                <div class="indicator">
-                  <button class="btn join-item">Adicionar</button>
-                </div>
-              </div>'''
-
-
-def render_planos_ideias_table():
-    return '''<div class="w-full my-4">
-                <table class="table">
-                  <!-- head -->
-                  <thead>
-                    <tr>
-                      <th>
-                        <label>
-                          <input type="checkbox" class="checkbox" />
-                        </label>
-                      </th>
-                      <th>Identificação</th>
-                      <th>Tipo</th>
-                      <th>Descrição</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <!-- row 1 -->
-                    <tr>
-                      <th>
-                        <label>
-                          <input type="checkbox" class="checkbox" />
-                        </label>
-                      </th>
-                      <td>
-                        <div class="flex items-center gap-3">
-                          <div>
-                            <div class="font-bold">Plano de idéias</div>
-                            <div class="text-sm opacity-50 text-center">1</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td>
-                        <br />
-                        <span class="badge badge-ghost badge-sm">Plano</span>
-                      </td>
-                      <th>
-                        <button class="btn btn-ghost btn-xs">details</button>
-                      </th>
-                    </tr>
-                    <!-- row 2 -->
-                    <tr>
-                      <th>
-                        <label>
-                          <input type="checkbox" class="checkbox" />
-                        </label>
-                      </th>
-                      <td>
-                        <div class="flex items-center gap-3">
-                          <div>
-                            <div class="font-bold">OCR de palavras</div>
-                            <div class="text-sm opacity-50 text-center">2</div>
-                          </div>
-                        </div>
-                      </td>
-                        <br />
-                      <td>  
-                        <span class="badge badge-ghost badge-sm">Plano</span>
-                      </td>
-                      </td>     
-                        <span class="" style="display: ruby-text;">
-                          Criar um aplicativo que faça a leitura de palavras em imagens, 
-                          coloque bordas em volta das palavras reconhecidas e as torne 
-                          selecionaveis
-                        </span>
-                        <button class="btn btn-ghost btn-xs">details</button>
-                      
-                      </td>
-                    </tr>
-                    <!-- row 3 -->
-                    <tr>
-                      <th>
-                        <label>
-                          <input type="checkbox" class="checkbox" />
-                        </label>
-                      </th>
-                      <td>
-                        <div class="flex items-center gap-3">
-                          <div>
-                            <div class="font-bold">Novo Plano</div>
-                            <div class="text-sm opacity-50 text-center">3</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td>
-                        <br />
-                        <span class="badge badge-ghost badge-sm">Plano</span>
-                      </td>
-                      <th>
-                        <button class="btn btn-ghost btn-xs">details</button>
-                      </th>
-                    </tr>
-                  </tbody>
-                  <!-- foot -->
-                  <tfoot>
-                    <tr>
-                      <th></th>
-                      <th>Identificação</th>
-                      <th>Tipo</th>
-                      <th>Descrição</th>
-                      <th></th>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>'''
-
-
-def render_ideas_plans():
-    """Renderiza a seção completa de Ideias e Planos (formulário + tabela)."""
-    return f'''<div class="space-y-4">
-      {render_planos_ideias()}
-      {render_planos_ideias_table()}
-    </div>'''
-
-
 def render_page(sel):
     calendar_html = render_calendar(sel.year, sel.month, sel)
     controls_html = render_controls(sel.year)
@@ -946,8 +811,6 @@ def render_page(sel):
     proximos_html = render_proximos_eventos_dia(sel)
     sync_html = render_sync_status()
     config_modal_html = load_config_template()
-    planos_ideias_html = render_planos_ideias()
-    planos_ideias_table_html = render_planos_ideias_table()
     
     return f'''<!DOCTYPE html>
 <html lang="pt-br" data-theme="light">
@@ -1000,10 +863,6 @@ def render_page(sel):
         {controls_html}
       </div>
       {day_panel_html}
-     <div class="space-y-4"> 
-      {planos_ideias_html}
-      {planos_ideias_table_html} 
-     </div>  
     </div>
     <!-- esse fechamento mantem a div principal centralizada -->
   </div>
