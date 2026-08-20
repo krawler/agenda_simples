@@ -23,6 +23,152 @@ function abrirIdeiasPlanos() {
   }
 }
 
+function contextoSeguroParaNotificacao() {
+  if (window.isSecureContext) {
+    return true;
+  }
+
+  var host = window.location && window.location.hostname ? window.location.hostname : '';
+  return host === 'localhost' || host === '127.0.0.1' || host === '::1';
+}
+
+function initNotificacoes() {
+  if (!('Notification' in window)) {
+    localStorage.setItem('notificacoesNavegador', 'false');
+    return;
+  }
+
+  if (!contextoSeguroParaNotificacao()) {
+    localStorage.setItem('notificacoesNavegador', 'false');
+    return;
+  }
+
+  if (Notification.permission === 'granted') {
+    localStorage.setItem('notificacoesNavegador', 'true');
+  } else if (Notification.permission === 'denied') {
+    localStorage.setItem('notificacoesNavegador', 'false');
+  }
+}
+
+window.solicitarPermissaoNotificacao = function solicitarPermissaoNotificacao() {
+  if (!('Notification' in window)) {
+    return Promise.resolve({
+      ok: false,
+      permission: 'unsupported',
+      message: 'Este navegador não suporta notificações.'
+    });
+  }
+
+  if (!contextoSeguroParaNotificacao()) {
+    return Promise.resolve({
+      ok: false,
+      permission: Notification.permission,
+      message: 'Abra em localhost/127.0.0.1 (ou HTTPS) para habilitar notificações.'
+    });
+  }
+
+  return Notification.requestPermission().then(function(permission) {
+    if (permission === 'granted') {
+      localStorage.setItem('notificacoesNavegador', 'true');
+      return {
+        ok: true,
+        permission: permission,
+        message: 'Permissão concedida.'
+      };
+    }
+
+    localStorage.setItem('notificacoesNavegador', 'false');
+    return {
+      ok: false,
+      permission: permission,
+      message: permission === 'denied'
+        ? 'Permissão negada. Libere nas configurações do site do navegador.'
+        : 'Permissão não concedida.'
+    };
+  }).catch(function(err) {
+    return {
+      ok: false,
+      permission: Notification.permission,
+      message: 'Erro ao solicitar permissão: ' + (err && err.message ? err.message : err)
+    };
+  });
+};
+
+function dispararNotificacao(titulo, mensagem, icone) {
+  if (Notification.permission !== 'granted') {
+    return;
+  }
+
+  var notificacao = new Notification(titulo, {
+    body: mensagem,
+    icon: icone || '/favicon.ico',
+    requireInteraction: true,
+    tag: 'agenda-notificacao'
+  });
+
+  notificacao.onclick = function() {
+    window.focus();
+    this.close();
+  };
+
+  setTimeout(function() {
+    if (notificacao && notificacao.close) {
+      notificacao.close();
+    }
+  }, 10000);
+}
+
+function verificarEventosProximos() {
+  if (!('Notification' in window)) {
+    return;
+  }
+
+  if (Notification.permission !== 'granted') {
+    return;
+  }
+
+  var notificacoesHabilitadas = localStorage.getItem('notificacoesNavegador') === 'true';
+  if (!notificacoesHabilitadas) {
+    return;
+  }
+
+  var alertasMinutos = JSON.parse(localStorage.getItem('alertasMinutos') || '[60,30,15]');
+  alertasMinutos = (alertasMinutos || []).map(function(value) {
+    return parseInt(value, 10);
+  }).filter(function(value) {
+    return Number.isInteger(value) && value > 0;
+  });
+
+  if (!alertasMinutos.length) {
+    return;
+  }
+
+  fetch('/api/eventos-proximos', {
+    headers: {
+      'X-Alertas-Minutos': JSON.stringify(alertasMinutos)
+    }
+  })
+    .then(function(response) {
+      return response.json();
+    })
+    .then(function(data) {
+      if (!data || !data.eventos || !data.eventos.length) {
+        return;
+      }
+
+      data.eventos.forEach(function(evento) {
+        dispararNotificacao(
+          '⏰ ' + evento.titulo,
+          'Evento em ' + evento.minutos_restantes + ' minutos (' + evento.hora + ')',
+          '/favicon.ico'
+        );
+      });
+    })
+    .catch(function() {
+      // Silencia falhas de consulta sem quebrar a UI.
+    });
+}
+
 $(document).ready(function() {
   var $syncStatus = $("#sync-status");
   var eventSource;
@@ -280,6 +426,9 @@ $(document).ready(function() {
 
   document.addEventListener('htmx:afterSwap', initAlertCountdowns);
   initAlertCountdowns();
+  initNotificacoes();
+  verificarEventosProximos();
+  window.__agendaNotificationInterval = setInterval(verificarEventosProximos, 60000);
 
   $("#sync-google").on("click", function(event) {
     event.preventDefault();

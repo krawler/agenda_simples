@@ -105,11 +105,26 @@
             <span class="label-text">Notificações do navegador (requer permissão)</span>
             <input type="checkbox" class="checkbox checkbox-primary" id="notificacoes-navegador">
           </label>
-          <div class="flex items-center gap-2 mt-1">
-            <button type="button" class="btn btn-xs btn-outline" id="btn-solicitar-permissao-notificacao">
-              Solicitar permissão
+          <div class="flex items-center gap-2 mt-1 flex-wrap">
+            <button type="button" class="btn btn-xs btn-outline btn-primary" id="btn-solicitar-permissao-notificacao">
+              Ativar notificações
+            </button>
+            <button type="button" class="btn btn-xs btn-ghost" id="btn-reabrir-permissao-notificacao">
+              Reabrir permissão
             </button>
             <span id="status-permissao-notificacao" class="text-xs opacity-70"></span>
+          </div>
+          <div id="notificacao-site-instrucoes" class="hidden mt-3 alert alert-warning alert-sm shadow-sm">
+            <div>
+              <div class="font-medium">Para ativar as notificações do site:</div>
+              <ol class="list-decimal ml-5 mt-1 space-y-1 text-sm">
+                <li>Abra as configurações do navegador.</li>
+                <li>Vá em Cookies e permissões → Configurações do site.</li>
+                <li>Encontre a opção Notificações.</li>
+                <li>Permita o site: <strong id="notificacao-site-origem">http://127.0.0.1:8000</strong>.</li>
+              </ol>
+              <div class="mt-2 text-xs opacity-80">Depois recarregue a página e clique novamente em “Ativar notificações”.</div>
+            </div>
           </div>
         </div>
       </div>
@@ -231,10 +246,29 @@
     }
   });
 
+  function abrirConfiguracoesNotificacoesNavegador() {
+    const origem = window.location.origin || 'http://127.0.0.1:8000';
+    const painelEl = document.getElementById('notificacao-site-instrucoes');
+    const origemEl = document.getElementById('notificacao-site-origem');
+    if (origemEl) {
+      origemEl.textContent = origem;
+    }
+    if (painelEl) {
+      painelEl.classList.remove('hidden');
+    }
+
+    const statusEl = document.getElementById('status-permissao-notificacao');
+    if (statusEl) {
+      statusEl.textContent = 'Ajuste a permissão no navegador e recarregue a página.';
+      statusEl.className = 'text-xs text-warning';
+    }
+  }
+
   function atualizarStatusPermissaoNotificacao() {
     const statusEl = document.getElementById('status-permissao-notificacao');
     const checkboxEl = document.getElementById('notificacoes-navegador');
     const btnEl = document.getElementById('btn-solicitar-permissao-notificacao');
+    const btnReabrirEl = document.getElementById('btn-reabrir-permissao-notificacao');
     if (!statusEl || !checkboxEl || !btnEl) return;
 
     if (!('Notification' in window)) {
@@ -243,6 +277,7 @@
       checkboxEl.checked = false;
       checkboxEl.disabled = true;
       btnEl.disabled = true;
+      btnEl.textContent = 'Notificações indisponíveis';
       localStorage.setItem('notificacoesNavegador', 'false');
       return;
     }
@@ -255,24 +290,29 @@
       checkboxEl.checked = false;
       checkboxEl.disabled = true;
       btnEl.disabled = true;
+      btnEl.textContent = 'Ativar notificações';
       localStorage.setItem('notificacoesNavegador', 'false');
       return;
     }
 
     checkboxEl.disabled = false;
     btnEl.disabled = false;
+    if (btnReabrirEl) {
+      btnReabrirEl.disabled = false;
+    }
+    btnEl.textContent = Notification.permission === 'granted' ? 'Notificações ativas' : 'Ativar notificações';
 
     if (Notification.permission === 'granted') {
       statusEl.textContent = 'Permissão concedida.';
       statusEl.className = 'text-xs text-success';
       checkboxEl.checked = localStorage.getItem('notificacoesNavegador') !== 'false';
     } else if (Notification.permission === 'denied') {
-      statusEl.textContent = 'Permissão negada no navegador. Reative em Configurações do Site (ícone de cadeado na barra de endereço).';
+      statusEl.textContent = 'Permissão bloqueada pelo navegador. Clique em “Ativar notificações” e, se preciso, reative em Configurações do site do navegador.';
       statusEl.className = 'text-xs text-error';
       checkboxEl.checked = false;
       localStorage.setItem('notificacoesNavegador', 'false');
     } else {
-      statusEl.textContent = 'Permissão pendente.';
+      statusEl.textContent = 'Permissão pendente. Clique no botão para ativar.';
       statusEl.className = 'text-xs opacity-70';
       checkboxEl.checked = false;
     }
@@ -299,13 +339,24 @@
       });
     }
 
+    const btnReabrirEl = document.getElementById('btn-reabrir-permissao-notificacao');
     if (!btnEl.dataset.permissionBinded) {
       btnEl.dataset.permissionBinded = 'true';
       btnEl.addEventListener('click', async function() {
         if (typeof window.solicitarPermissaoNotificacao === 'function') {
-          await window.solicitarPermissaoNotificacao();
+          const resultado = await window.solicitarPermissaoNotificacao();
+          if (resultado && resultado.ok && resultado.permission === 'granted') {
+            checkboxEl.checked = true;
+          }
         }
         atualizarStatusPermissaoNotificacao();
+      });
+    }
+
+    if (btnReabrirEl && !btnReabrirEl.dataset.permissionBinded) {
+      btnReabrirEl.dataset.permissionBinded = 'true';
+      btnReabrirEl.addEventListener('click', function() {
+        abrirConfiguracoesNotificacoesNavegador();
       });
     }
 
