@@ -38,7 +38,6 @@ from renderers import (
     render_sync_status,
     render_page,
     load_config_template,
-    render_ideas_plans,
 )
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
