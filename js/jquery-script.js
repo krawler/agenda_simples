@@ -169,6 +169,52 @@ function verificarEventosProximos() {
     });
 }
 
+function verificarEventosMetadeTempo() {
+  if (!('Notification' in window)) {
+    return;
+  }
+
+  if (Notification.permission !== 'granted') {
+    return;
+  }
+
+  var notificacoesHabilitadas = localStorage.getItem('notificacoesNavegador') === 'true';
+  if (!notificacoesHabilitadas) {
+    return;
+  }
+
+  fetch('/api/eventos-metade-tempo')
+    .then(function(response) {
+      return response.json();
+    })
+    .then(function(data) {
+      if (!data || !data.eventos || !data.eventos.length) {
+        return;
+      }
+
+      data.eventos.forEach(function(evento) {
+        dispararNotificacao(
+          '⏱️ ' + evento.titulo,
+          'Já se passaram ' + evento.minutos_passados + ' minutos de ' + evento.duracao_minutos + ' minutos',
+          '/favicon.ico'
+        );
+        // Emitir beep
+        try {
+          if (window.speechSynthesis) {
+            var utterance = new SpeechSynthesisUtterance('Alerta: ' + evento.titulo + ', já se passaram ' + evento.minutos_passados + ' minutos');
+            utterance.volume = 0.5;
+            speechSynthesis.speak(utterance);
+          }
+        } catch (e) {
+          // Silencia falhas
+        }
+      });
+    })
+    .catch(function() {
+      // Silencia falhas de consulta sem quebrar a UI.
+    });
+}
+
 $(document).ready(function() {
   var $syncStatus = $("#sync-status");
   var eventSource;
@@ -429,7 +475,9 @@ $(document).ready(function() {
   initAlertCountdowns();
   initNotificacoes();
   verificarEventosProximos();
+  verificarEventosMetadeTempo();
   window.__agendaNotificationInterval = setInterval(verificarEventosProximos, 60000);
+  window.__agendaMetadeTempoInterval = setInterval(verificarEventosMetadeTempo, 60000);
 
   $("#sync-google").on("click", function(event) {
     event.preventDefault();
