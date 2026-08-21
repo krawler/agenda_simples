@@ -456,7 +456,7 @@ $(document).ready(function() {
   });
 
   // Rolagem suave até o topo ao clicar no botão "Próximos Eventos"
-  $(document).on('click', '.proximos-eventos-btn', function(event) {
+  $(document).on('click', '#proximos-eventos-btn', function(event) {
     event.preventDefault();
     $('html, body').animate({ scrollTop: 0 }, 1000);
   });
