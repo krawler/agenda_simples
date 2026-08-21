@@ -116,7 +116,7 @@ def render_controls(ano_atual=None):
     <div class="flex flex-col sm:flex-row items-stretch gap-2 w-full">
       <div class="flex flex-wrap gap-2 w-full">
         <button class="btn btn-sm btn-primary flex-1 min-w-[140px]" hx-get="/alerts" hx-target="#alerts-container"
-          hx-swap="innerHTML">→ Próximos eventos </button>
+          hx-swap="innerHTML" id="proximos-eventos-btn">→ Próximos eventos </button>
         <button id="sync-google" class="btn btn-sm btn-primary flex-1 min-w-[140px]">☁ Sincronizar eventos </button>
       </div>
       <div class="flex flex-wrap gap-2 w-full">
@@ -570,6 +570,7 @@ def render_sync_status(status_msg="", detail_msg="", is_loading=False, auto_hide
         html_output.append(f'''<div id="sync-status" class="alert {alert_class} shadow-sm mt-4">
           <div class="flex flex-col gap-3 p-4">
             <div class="flex items-center justify-between">
+              <span class="loading loading-infinity loading-lg"></span>
               <span class="text-lg font-semibold">Status da sincronização</span>
               <button type="button" class="btn btn-xs btn-ghost btn-circle close-btn" data-close-target="sync-status" title="Fechar">✕</button>
             </div>
@@ -719,14 +720,6 @@ DURACAO_MODAL_JS = """
     });
   </script>
 """
-
-
-def render_ideas_plans():
-    """Placeholder para a seção de ideias e planos."""
-    return '''<div class="card bg-base-100 shadow-md p-4">
-      <h3 class="font-bold text-lg mb-2">💡 Ideias e planos</h3>
-      <p class="text-sm opacity-70">Nenhuma ideia ainda registrada.</p>
-    </div>'''
 
 
 def render_page(sel):
