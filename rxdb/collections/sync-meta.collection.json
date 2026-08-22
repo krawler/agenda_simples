@@ -1,0 +1,17 @@
+{
+  "collection": "sync_meta",
+  "schemaVersion": 0,
+  "indexes": [
+    "deviceId",
+    "lastSyncAt",
+    "updatedAt"
+  ],
+  "fields": {
+    "id": "string",
+    "lastSyncAt": "date-time",
+    "deviceId": "string",
+    "lastSequence": "number",
+    "status": "string",
+    "updatedAt": "date-time"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "collection": "eventos",
+  "schemaVersion": 0,
+  "indexes": [
+    "inicio",
+    "status",
+    "userId",
+    "updatedAt"
+  ],
+  "fields": {
+    "id": "string",
+    "titulo": "string",
+    "inicio": "date-time",
+    "duracaoMinutos": "number",
+    "descricao": "string",
+    "except": "string[]",
+    "recorrencia": {
+      "tipo": "string",
+      "until": "string",
+      "diasSemana": "number[]"
+    },
+    "status": "string",
+    "cancelado": "boolean",
+    "concluido": "boolean",
+    "userId": "string",
+    "deleted": "boolean",
+    "createdAt": "date-time",
+    "updatedAt": "date-time"
+  }
+}
