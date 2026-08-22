@@ -167,7 +167,7 @@ def render_evento_item(occ, e):
       </ul>
     </div>'''
     else:
-        acoes = f'''<div class="flex gap-1">
+        acoes = f'''<div class="flex justify-end gap-1">
       <button class="btn btn-xs btn-ghost" {editar}>✎</button>
       <button class="btn btn-xs btn-ghost text-error"
         hx-post="/delete?id={e["id"]}&date={iso}" hx-target="#day-panel"
@@ -179,9 +179,12 @@ def render_evento_item(occ, e):
     {occ:%H:%M}{dur}
   </div>
   <div class="flex-1">
-    <div class="font-medium flex items-center gap-2">{esc(e["titulo"])} {badges}{acoes}</div>
+    <div class="font-medium flex items-center gap-2">{esc(e["titulo"])} {badges}</div>
     {status_indicador}
     {desc}
+  </div>
+  <div class="flex justify-end">
+    {acoes}
   </div>
 </li>'''
 
@@ -279,7 +282,7 @@ def render_day_panel(d, editando=None):
     iso = d.isoformat()
     opts = "".join(
         f'<option value="{r}"{" selected" if r == "repeat" or r == "none" else ""}>'
-        f'{"sem repetição" if r == "none" else r}</option>'
+        f'{"sem repetição" se r == "none" else r}</option>'
         for r in agenda.REPEATS)
 
     status_opts_novo = ''.join([
