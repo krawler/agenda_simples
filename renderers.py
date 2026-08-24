@@ -115,8 +115,7 @@ def render_controls(ano_atual=None):
   <div class="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full">
     <div class="flex flex-col sm:flex-row items-stretch gap-2 w-full">
       <div class="flex flex-wrap gap-2 w-full">
-        <button class="btn btn-sm btn-primary flex-1 min-w-[140px]" hx-get="/alerts" hx-target="#alerts-container"
-          hx-swap="innerHTML" id="proximos-eventos-btn">→ Próximos eventos </button>
+        <button class="btn btn-sm btn-primary flex-1 min-w-[140px]" id="proximos-eventos-btn">→ Próximos eventos </button>
         <button id="sync-google" class="btn btn-sm btn-primary flex-1 min-w-[140px]">☁ Sincronizar eventos </button>
       </div>
       <div class="flex flex-wrap gap-2 w-full">
@@ -730,7 +729,6 @@ def render_page(sel):
     controls_html = render_controls(sel.year)
     day_panel_html = render_day_panel(sel)
     alerts_html = render_alerts_banner()
-    proximos_html = render_proximos_eventos_dia(sel)
     sync_html = render_sync_status()
     config_modal_html = load_config_template()
 
@@ -774,7 +772,6 @@ def render_page(sel):
     </header>
     <div id="alerts-container">
         {alerts_html}
-        {proximos_html}
     </div>
     <div id="sync-container">
         {sync_html}

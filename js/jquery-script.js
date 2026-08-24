@@ -503,9 +503,19 @@ $(document).ready(function() {
     }
   });
 
-  // Rolagem suave até o topo ao clicar no botão "Próximos Eventos"
+  // Carrega e exibe os próximos eventos ao clicar no botão
   $(document).on('click', '#proximos-eventos-btn', function(event) {
     event.preventDefault();
-    $('html, body').animate({ scrollTop: 0 }, 1000);
+    var $proximosContainer = $('#proximos-eventos');
+    if ($proximosContainer.length === 0) {
+      // Fetch and render the proximos eventos
+      $.get('/alerts', function(data) {
+        $('#alerts-container').html(data);
+        // Scroll to the proximos eventos section
+        $('#proximos-eventos').get(0).scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    } else {
+      $proximosContainer.get(0).scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   });
 });
