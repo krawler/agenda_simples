@@ -140,8 +140,6 @@ def render_evento_item(occ, e):
     if e.get("repeat"):
         badges += (f'<span class="badge badge-sm badge-outline">'
                    f'{esc(e["repeat"])}</span>')
-    desc = (f'<div class="text-sm opacity-70">{linkify_urls(e["desc"])}</div>'
-            if e.get("desc") else "")
     iso = occ.date().isoformat()
     editar = (f'hx-get="/edit?id={e["id"]}&date={iso}" '
               f'hx-target="#day-panel"')
@@ -153,11 +151,13 @@ def render_evento_item(occ, e):
     elif e.get("concluido") and occ > agora:
         status_indicador = '<span class="text-green-700 font-medium">(evento concluído)</span>'
 
+    desc = (f'<div {editar} class="text-sm opacity-70 hover:underline cursor-pointer">{linkify_urls(e["desc"])}</div>'
+            if e.get("desc") else "")
+
     if e.get("repeat"):
         acoes = f'''<div class="dropdown dropdown-end">
       <button tabindex="0" class="btn btn-xs btn-ghost">⋯</button>
       <ul tabindex="0" class="dropdown-content z-10 menu p-2 shadow bg-base-100 rounded-box w-44">
-        <li><a {editar}>✎ Editar série</a></li>
         <li><a hx-post="/skip?id={e["id"]}&date={iso}" hx-target="#day-panel">
           ⤵ Pular este dia</a></li>
         <li><a class="text-error"
@@ -167,7 +167,6 @@ def render_evento_item(occ, e):
     </div>'''
     else:
         acoes = f'''<div class="flex justify-end gap-1">
-      <button class="btn btn-xs btn-ghost" {editar}>✎</button>
       <button class="btn btn-xs btn-ghost text-error"
         hx-post="/delete?id={e["id"]}&date={iso}" hx-target="#day-panel"
         hx-confirm="Remover '{esc(e["titulo"])}'?">✕</button>
@@ -178,7 +177,7 @@ def render_evento_item(occ, e):
     {occ:%H:%M}{dur}
   </div>
   <div class="flex-1">
-    <div class="font-medium flex items-center gap-2">{esc(e["titulo"])} {badges}</div>
+    <div class="font-medium flex items-center gap-2"><a {editar} class="hover:underline">{esc(e["titulo"])}</a> {badges}</div>
     {status_indicador}
     {desc}
   </div>
