@@ -1,0 +1,24 @@
+<li class="p-3 rounded-lg bg-base-200 ring ring-primary ring-1">
+  <form hx-post="/update" hx-target="#day-panel" class="space-y-2" data-duration-confirm>
+    <input type="hidden" name="id" value="{{ e.id }}">
+    <input type="hidden" name="panel_date" value="{{ iso }}">
+    <input name="titulo" required value="{{ titulo }}" class="input input-bordered input-sm w-full" ...>
+    <div class="flex gap-2">
+      <input type="date" name="date" value="{{ base_date }}" required class="input input-bordered input-sm flex-1">
+      <input type="time" name="time" value="{{ base_time }}" required class="input input-bordered input-sm w-28">
+      <input type="number" name="dur" min="1" value="{{ dur }}" placeholder="min" class="input input-bordered input-sm w-24 duration-field" id="dur-edit-{{ e.id }}">
+    </div>
+    <div class="flex grid md:grid-cols-3 gap-2">
+      <select name="repeat" class="select select-bordered select-sm flex-1">{{ opts|safe }}</select>
+      <input type="date" name="until" value="{{ until }}" title="repetir até" class="input input-bordered input-sm">
+      <select name="status" class="select select-bordered select-sm flex-1">{{ status_opts|safe }}</select>
+    </div>
+    <div class="flex gap-2">
+      <input name="desc" value="{{ desc }}" placeholder="Descrição" class="input input-bordered input-sm w-full">
+    </div>
+    <div class="flex gap-2">
+      <button type="submit" class="btn btn-primary btn-sm flex-1">Salvar</button>
+      <button type="button" class="btn btn-ghost btn-sm flex-1" hx-get="/day?date={{ iso }}" hx-target="#day-panel">Cancelar Evento</button>
+    </div>
+  </form>
+</li>

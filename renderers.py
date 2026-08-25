@@ -8,6 +8,7 @@ import re
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
+import jinja2
 import agenda
 
 WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"]
@@ -526,30 +527,24 @@ def render_google_events_list(google_events, mode="importados"):
             f'</div>'
         )
 
-    return f'''<div id="google-events-list-{mode}" class="{alert_class}">
-                <div class="flex items-center justify-between mb-3">
-                  <span class="font-semibold">{titulo_header}</span>
-                  <button type="button" class="btn btn-xs btn-ghost btn-circle close-btn" data-close-target="google-events-list-{mode}" title="Fechar">✕</button>
-                </div>
-                <div class="space-y-3 max-h-80 overflow-y-auto">
-                {"".join(linhas)}
-                </div>
-              </div>'''
+    template = env.get_template("google_events_list.html")
+    return template.render(
+        mode=mode, alert_class=alert_class, titulo_header=titulo_header,
+        linhas="".join(linhas)
+    )
 
 
 def render_sync_status(status_msg="", detail_msg="", is_loading=False, auto_hide=False, google_events_importados=None, google_events_exportados=None, sync_logs=None):
     """Renderiza o status da sincronização e os dois quadros de eventos."""
     if is_loading:
-        return f'''<div id="sync-status" class="alert alert-info shadow-sm mt-4">
-                    <div class="flex flex-wrap gap-3 p-4">
-                      <div class="flex items-center gap-3">
-                        <span class="loading loading-spinner loading-sm hidden"></span>
-                        <span class="font-semibold">Sincronizando com Google Calendar...</span>
-                      </div>
-                      <div id="sync-status-detail" class="text-sm opacity-70">{esc(detail_msg)}</div>
-                      <button type="button" class="btn btn-xs btn-ghost btn-circle close-btn" data-close-target="sync-status" title="Fechar">✕</button>
-                    </div>
-                  </div>'''
+        template = env.get_template("sync_status.html")
+        return template.render(
+            alert_class="alert-info",
+            status_msg="Sincronizando com Google Calendar...",
+            detail_msg=esc(detail_msg),
+            details_link="",
+            auto_hide_script=""
+        )
 
     html_output = []
 
@@ -568,16 +563,14 @@ def render_sync_status(status_msg="", detail_msg="", is_loading=False, auto_hide
         if sync_logs:
             details_link = f'''<a href="#" class="link link-hover text-xs ml-2" onclick="openSyncDetailsModal(); return false;">Exibir</a>'''
 
-        html_output.append(f'''<div id="sync-status" class="alert {alert_class} shadow-sm mt-4">
-          <div class="flex flex-col gap-3 p-4">
-            <div class="flex items-center justify-between">
-              <span class="loading loading-infinity loading-lg"></span>
-              <span class="text-lg font-semibold">Status da sincronização</span>
-              <button type="button" class="btn btn-xs btn-ghost btn-circle close-btn" data-close-target="sync-status" title="Fechar">✕</button>
-            </div>
-            <span id="sync-status-detail" class="text-sm opacity-70">{esc(status_msg)} {esc(detail_msg)}{details_link}</span>
-          </div>
-        </div>{auto_hide_script}''')
+        template = env.get_template("sync_status.html")
+        html_output.append(template.render(
+            alert_class=alert_class,
+            status_msg=esc(status_msg),
+            detail_msg=esc(detail_msg),
+            details_link=details_link,
+            auto_hide_script=auto_hide_script
+        ))
 
         if sync_logs:
             try:
@@ -731,87 +724,15 @@ def render_page(sel):
     sync_html = render_sync_status()
     config_modal_html = load_config_template()
 
-    return f'''<!DOCTYPE html>
-<html lang="pt-br" data-theme="light">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Agenda Simples</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" rel="stylesheet">
-  <style>
-    .balloon-dark {{
-      background-color: rgba(17, 24, 39, 0.96);
-      color: #f8fafc;
-      border: 1px solid rgba(148, 163, 184, 0.24);
-      box-shadow: 0 12px 32px rgba(15, 23, 42, 0.28);
-      border-radius: 0.5rem;
-      padding: 0.5rem 0.75rem;
-      font-size: 0.92rem;
-      line-height: 1.3;
-      max-width: 240px;
-      word-break: break-word.
-    }}
-  </style>
-  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
-  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/urin/jquery.balloon.js/jquery.balloon.min.js"></script>
-  <script>
-    (function () {{
-      var t = localStorage.getItem("tema");
-      if (t) document.documentElement.setAttribute("data-theme", t);
-    }})();
-  </script>
-  <script src="/js/jquery-script.js"></script>
-</head>
-<body class="bg-base-200 min-h-screen">
-  <div class="max-w-5xl mx-auto p-4 space-y-4">
-    <header class="flex items-center justify-center gap-4">
-      <h1 class="text-2xl font-bold">📅 Agenda Brasileira Definitiva</h1>
-    </header>
-    <div id="alerts-container">
-        {alerts_html}
-    </div>
-    <div id="sync-container">
-        {sync_html}
-    </div>
-    <div class="grid md:grid-cols-2 gap-4">
-      <div class="space-y-4">
-        {calendar_html}
-        {controls_html}
-      </div>
-      {day_panel_html}
-    </div>
-  </div>
-
-  <dialog id="duracao-modal" class="modal">
-    <div class="modal-box">
-      <h3 class="font-bold text-lg">Duração do evento</h3>
-      <p class="py-4">Deseja salvar esse evento sem tempo de duração?</p>
-      <div class="modal-action">
-        <form method="dialog" id="duracao-modal-form">
-          <button id="btn-duracao-nao" type="button" class="btn btn-ghost">Não</button>
-          <button id="btn-duracao-sim" type="button" class="btn btn-primary">Sim</button>
-        </form>
-      </div>
-    </div>
-    <form method="dialog" class="modal-backdrop">
-      <button>Fechar</button>
-    </form>
-  </dialog>
-
-  {SYNC_DETAILS_MODAL}
-
-  <dialog id="config-modal" class="modal modal-bottom sm:modal-middle">
-    <div class="modal-box max-w-lg max-h-[90vh] overflow-y-auto">
-      {config_modal_html}
-    </div>
-    <form method="dialog" class="modal-backdrop">
-      <button>Fechar</button>
-    </form>
-  </dialog>
-
-  {DURACAO_MODAL_JS}
-  {SYNC_MODAL_JS}
-</body>
-</html>'''
+    template = env.get_template("page.html")
+    return template.render(
+        calendar_html=calendar_html,
+        controls_html=controls_html,
+        day_panel_html=day_panel_html,
+        alerts_html=alerts_html,
+        sync_html=sync_html,
+        config_modal_html=config_modal_html,
+        sync_details_modal=SYNC_DETAILS_MODAL,
+        sync_modal_js=SYNC_MODAL_JS,
+        duracao_modal_js=DURACAO_MODAL_JS
+    )

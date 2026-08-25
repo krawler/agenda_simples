@@ -1,0 +1,11 @@
+<div id="sync-status" class="alert {{ alert_class }} shadow-sm mt-4">
+  <div class="flex flex-col gap-3 p-4">
+    <div class="flex items-center justify-between">
+      <span class="loading loading-infinity loading-lg"></span>
+      <span class="text-lg font-semibold">Status da sincronização</span>
+      <button type="button" class="btn btn-xs btn-ghost btn-circle close-btn" data-close-target="sync-status" title="Fechar">✕</button>
+    </div>
+    <span id="sync-status-detail" class="text-sm opacity-70">{{ status_msg }} {{ detail_msg }}{{ details_link|safe }}</span>
+  </div>
+</div>
+{{ auto_hide_script|safe }}
