@@ -177,8 +177,6 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(alerts_banner + proximos_eventos)
             case "/config":
                 self._send(load_config_template())
-            case "/ideas-plans":
-                self._send(render_ideas_plans())
             case "/sync-stream":
                 self._stream_sync_status()
             case "/export":
