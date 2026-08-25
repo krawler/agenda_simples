@@ -543,7 +543,7 @@ def render_sync_status(status_msg="", detail_msg="", is_loading=False, auto_hide
         return f'''<div id="sync-status" class="alert alert-info shadow-sm mt-4">
                     <div class="flex flex-wrap gap-3 p-4">
                       <div class="flex items-center gap-3">
-                        <span class="loading loading-spinner loading-sm"></span>
+                        <span class="loading loading-spinner loading-sm hidden"></span>
                         <span class="font-semibold">Sincronizando com Google Calendar...</span>
                       </div>
                       <div id="sync-status-detail" class="text-sm opacity-70">{esc(detail_msg)}</div>
