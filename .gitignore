@@ -13,3 +13,4 @@ token.json
 credentials.json
 .agenda_server.pid
 firebase/*
+settings.json
