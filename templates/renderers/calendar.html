@@ -1,0 +1,15 @@
+<div id="calendar" class="card bg-base-100 shadow-md" data-ano="{{ ano }}" data-mes="{{ mes }}" data-sel="{{ sel.isoformat() }}">
+  <div class="card-body p-4">
+    <div class="flex items-center justify-between mb-2">
+      <button class="btn btn-sm btn-ghost"
+        hx-get="/calendar?year={{ prev_ano }}&month={{ prev_mes }}&sel={{ sel.isoformat() }}"
+        hx-target="#calendar" hx-swap="outerHTML">‹</button>
+      <h2 class="text-lg font-bold">{{ meses[mes] }} {{ ano }}</h2>
+      <button class="btn btn-sm btn-ghost"
+        hx-get="/calendar?year={{ next_ano }}&month={{ next_mes }}&sel={{ sel.isoformat() }}"
+        hx-target="#calendar" hx-swap="outerHTML">›</button>
+    </div>
+    <div class="grid grid-cols-7 gap-1">{{ cabecalho|safe }}</div>
+    <div class="grid grid-cols-7 gap-1 mt-1">{{ celulas|safe }}</div>
+  </div>
+</div>
