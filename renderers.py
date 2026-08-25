@@ -17,9 +17,7 @@ TEMAS = ["light", "dark", "cupcake", "corporate", "emerald", "synthwave",
 MESES = ["", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
          "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
 ANOS_DISPONIVEIS = [2025, 2026, 2027, 2028]
-TEMPLATES_DIR = Path(__file__).resolve().parent / "templates" / "renderers"
-
-env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(TEMPLATES_DIR)), autoescape=False)
+TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 
 
 def esc(v):
@@ -44,7 +42,7 @@ def linkify_urls(text):
 
 def load_config_template():
     """Carrega o template de configuração do arquivo."""
-    template_path = Path(__file__).resolve().parent / "templates" / "config.htm"
+    template_path = TEMPLATES_DIR / "config.htm"
     if template_path.exists():
         return template_path.read_text(encoding="utf-8")
     return "<div class='alert alert-error'>Template config.htm não encontrado</div>"
@@ -82,15 +80,21 @@ def render_calendar(ano, mes, sel):
                 f'hx-get="/day?date={iso}" hx-target="#day-panel">'
                 f'<span>{dia}</span>{ponto}</button>')
 
-    template = env.get_template("calendar.html")
-    return template.render(
-        ano=ano, mes=mes, sel=sel,
-        prev_ano=prev_ano, prev_mes=prev_mes,
-        next_ano=next_ano, next_mes=next_mes,
-        meses=MESES,
-        cabecalho=cabecalho,
-        celulas="".join(celulas)
-    )
+    return f'''<div id="calendar" class="card bg-base-100 shadow-md" data-ano="{ano}" data-mes="{mes}" data-sel="{sel.isoformat()}">
+  <div class="card-body p-4">
+    <div class="flex items-center justify-between mb-2">
+      <button class="btn btn-sm btn-ghost"
+        hx-get="/calendar?year={prev_ano}&month={prev_mes}&sel={sel.isoformat()}"
+        hx-target="#calendar" hx-swap="outerHTML">‹</button>
+      <h2 class="text-lg font-bold">{MESES[mes]} {ano}</h2>
+      <button class="btn btn-sm btn-ghost"
+        hx-get="/calendar?year={next_ano}&month={next_mes}&sel={sel.isoformat()}"
+        hx-target="#calendar" hx-swap="outerHTML">›</button>
+    </div>
+    <div class="grid grid-cols-7 gap-1">{cabecalho}</div>
+    <div class="grid grid-cols-7 gap-1 mt-1">{"".join(celulas)}</div>
+  </div>
+</div>'''
 
 
 def eventos_do_dia(d):
@@ -107,8 +111,25 @@ def dias_com_eventos(ano, mes):
 
 
 def render_controls(ano_atual=None):
-    template = env.get_template("controls.html")
-    return template.render()
+    """Renderiza os controles (botões, seletor de ano) para ficar abaixo do calendário."""
+    return f'''<div class="card bg-base-100 shadow-md p-4">
+  <div class="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full">
+    <div class="flex flex-col sm:flex-row items-stretch gap-2 w-full">
+      <div class="flex flex-wrap gap-2 w-full">
+        <button class="btn btn-sm btn-primary flex-1 min-w-[140px]" id="proximos-eventos-btn">→ Próximos eventos </button>
+        <button id="sync-google" class="btn btn-sm btn-primary flex-1 min-w-[140px]">☁ Sincronizar eventos </button>
+      </div>
+      <div class="flex flex-wrap gap-2 w-full">
+        <button id="ideas-plans" class="btn btn-sm btn-primary flex-1 min-w-[140px]" onclick="abrirIdeiasPlanos()">
+          💡 Ideias e planos
+        </button>
+        <button class="btn btn-sm btn-primary flex-1 min-w-[140px]" onclick="abrirConfig()">
+          ⚙️ Configurações
+        </button>
+      </div>
+    </div>
+  </div>
+</div>'''
 
 
 def render_evento_item(occ, e):
@@ -152,12 +173,19 @@ def render_evento_item(occ, e):
         hx-confirm="Remover '{esc(e["titulo"])}'?">✕</button>
     </div>'''
 
-    template = env.get_template("evento_item.html")
-    return template.render(
-        occ=occ, dur=dur, badges=badges, editar=editar,
-        status_indicador=status_indicador, desc=desc, acoes=acoes,
-        titulo=esc(e["titulo"])
-    )
+    return f'''<li class="flex items-start gap-3 p-3 rounded-lg bg-base-200">
+  <div class="text-primary font-mono font-semibold whitespace-nowrap">
+    {occ:%H:%M}{dur}
+  </div>
+  <div class="flex-1">
+    <div class="font-medium flex items-center gap-2"><a {editar} class="hover:underline">{esc(e["titulo"])}</a> {badges}</div>
+    {status_indicador}
+    {desc}
+  </div>
+  <div class="flex justify-end">
+    {acoes}
+  </div>
+</li>'''
 
 
 def render_edit_form(e, occ, panel_date):
@@ -181,17 +209,63 @@ def render_edit_form(e, occ, panel_date):
         f'<option value="cancelado"{" selected" if current_status == "cancelado" else ""}>Cancelado</option>'
     ])
 
-    template = env.get_template("edit_form.html")
-    return template.render(
-        e=e, occ=occ, iso=iso, base=base,
-        opts=opts, status_opts=status_opts,
-        titulo=esc(e["titulo"]),
-        base_date=base.date().isoformat(),
-        base_time=f"{base:%H:%M}",
-        dur=e.get("dur") or "",
-        until=esc(e.get("until") or ""),
-        desc=esc(e.get("desc") or "")
-    )
+    return f'''<li class="p-3 rounded-lg bg-base-200 ring ring-primary ring-1">
+  <form hx-post="/update" hx-target="#day-panel" class="space-y-2" data-duration-confirm>
+    <input type="hidden" name="id" value="{e["id"]}">
+    <input type="hidden" name="panel_date" value="{iso}">
+    <input name="titulo" required value="{esc(e["titulo"])}"
+      class="input input-bordered input-sm w-full"
+      data-balloon-content="Preencha o título do evento"
+      data-balloon-pos="right"
+      data-balloon-class="balloon-dark">
+    <div class="flex gap-2">
+      <input type="date" name="date" value="{base.date().isoformat()}" required
+        class="input input-bordered input-sm flex-1"
+        data-balloon-content="Selecione a data do evento"
+        data-balloon-pos="right"
+        data-balloon-class="balloon-dark">
+      <input type="time" name="time" value="{base:%H:%M}" required
+        class="input input-bordered input-sm w-28"
+        data-balloon-content="Defina a hora de início"
+        data-balloon-pos="right"
+        data-balloon-class="balloon-dark">
+      <input type="number" name="dur" min="1" value="{e.get('dur') or ''}"
+        placeholder="min" class="input input-bordered input-sm w-24 duration-field" id="dur-edit-{e['id']}"
+        data-balloon-content="Duração em minutos"
+        data-balloon-pos="right"
+        data-balloon-class="balloon-dark">
+    </div>
+    <div class="flex grid md:grid-cols-3 gap-2">
+      <select name="repeat" class="select select-bordered select-sm flex-1"
+        data-balloon-content="Tipo de repetição"
+        data-balloon-pos="right"
+        data-balloon-class="balloon-dark">{opts}</select>
+       <input type="date" name="until" value="{esc(e.get('until') or '')}"
+                title="repetir até" class="input input-bordered input-sm"
+                data-balloon-content="Data limite para repetição"
+                data-balloon-pos="right"
+                data-balloon-class="balloon-dark">
+        <select name="status" class="select select-bordered select-sm flex-1"
+              data-balloon-content="Status do evento"
+              data-balloon-pos="right"
+              data-balloon-class="balloon-dark">
+              {status_opts}
+            </select>
+    </div>
+    <div class="flex gap-2">
+      <input name="desc" value="{esc(e.get('desc') or '')}" placeholder="Descrição"
+            class="input input-bordered input-sm w-full"
+            data-balloon-content="Descrição opcional do evento"
+            data-balloon-pos="right"
+            data-balloon-class="balloon-dark">
+    </div>
+    <div class="flex gap-2">
+      <button type="submit" class="btn btn-primary btn-sm flex-1">Salvar</button>
+      <button type="button" class="btn btn-ghost btn-sm flex-1"
+        hx-get="/day?date={iso}" hx-target="#day-panel">Cancelar Evento</button>
+    </div>
+  </form>
+</li>'''
 
 
 def render_day_panel(d, editando=None):
@@ -273,11 +347,13 @@ def render_day_panel(d, editando=None):
       </div>
     </form>'''
 
-    template = env.get_template("day_panel.html")
-    return template.render(
-        d=d, lista=lista, novo_evento=novo_evento,
-        weekdays=WEEKDAYS
-    )
+    return f'''<div id="day-panel" class="card bg-base-100 shadow-md">
+  <div class="card-body p-4">
+    <h2 class="text-lg font-bold">{d:%d/%m/%Y} · {WEEKDAYS[(d.weekday()+1)%7]}</h2>
+    {lista}
+    {novo_evento}
+  </div>
+</div>'''
 
 
 def render_proximos_eventos_dia(d):
@@ -294,10 +370,15 @@ def render_proximos_eventos_dia(d):
             for occ, e in itens_hoje)
 
         label = "hoje" if d == hoje else f"{d:%d/%m/%Y}"
-        template = env.get_template("proximos_eventos.html")
-        return template.render(
-            label=label, count=len(itens_hoje), linhas=linhas
-        )
+        return f'''<div id="proximos-eventos" class="alert alert-warning shadow-sm my-4">
+                    <div class="flex items-center justify-between mb-2">
+                      <span class="font-semibold" style="margin-top:.2rem">Próximos eventos de {label} ({len(itens_hoje)}):</span>
+                    </div>
+                    <div class="space-y-1 max-h-60 overflow-y-auto">
+                      {linhas}
+                    </div>
+                    <button type="button" class="btn btn-xs btn-ghost btn-circle close-btn close-alert" data-close-target="proximos-eventos" title="Fechar">✕</button>
+                  </div>'''
 
     html_hoje = ('<div class="alert alert-warning shadow-sm my-4">'
                  '<div class="flex items-center justify-between mb-2">'
@@ -347,8 +428,12 @@ def render_alerts_banner():
         f'<span class="js-cd-s" style="--value:0; --digits: 2;" aria-live="polite" aria-label="0">00</span>'
         f'</span>'
         for occ, e in itens)
-    template = env.get_template("alerts_banner.html")
-    return template.render(linhas=linhas)
+    return (f'<div id="alerts-banner" class="alert alert-error shadow-sm">'
+            f'<div class="flex flex-wrap gap-2 items-center">'
+            f'<span class="font-semibold">⚠ Eventos iniciando em 30 min:</span>{linhas}</div>'
+            f'<button type="button" class="btn btn-xs btn-ghost btn-circle close-btn close-alert" data-close-target="alerts-banner" title="Fechar">✕</button>'
+            f'</div>'
+            f'</div>')
 
 
 def format_event_datetime_br(value):
