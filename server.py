@@ -39,6 +39,14 @@ from renderers import (
     render_page,
     load_config_template,
 )
+from inc.funcoes_agenda import (
+    eventos_do_dia,
+    dias_com_eventos,
+    ler_pid_do_arquivo,
+    encerrar_processo_por_pid,
+    salvar_pid_em_arquivo,
+    remover_pid_arquivo_se_for_deste_processo,
+)
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
@@ -62,17 +70,7 @@ sse_lock = threading.Lock()
 
 
 # --------------------------------------------------------------- consultas dados
-def eventos_do_dia(d):
-    wstart = datetime.combine(d, time.min)
-    wend = datetime.combine(d, time.max)
-    return agenda.expandir(agenda.carregar(), wstart, wend)
-
-
-def dias_com_eventos(ano, mes):
-    ultimo = calmod.monthrange(ano, mes)[1]
-    wstart = datetime.combine(date(ano, mes, 1), time.min)
-    wend = datetime.combine(date(ano, mes, ultimo), time.max)
-    return {occ.date() for occ, _ in agenda.expandir(agenda.carregar(), wstart, wend)}
+# (funções movidas para inc/funcoes_agenda.py)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -563,54 +561,6 @@ def monitorar_arquivos():
                 if server_instance is not None:
                     # Shutdown deve ocorrer fora da thread do servidor.
                     threading.Thread(target=server_instance.shutdown, daemon=True).start()
-
-
-def ler_pid_do_arquivo():
-    """Lê o PID do arquivo .agenda_server.pid."""
-    try:
-        if PID_FILE.exists():
-            return int(PID_FILE.read_text().strip())
-    except (ValueError, IOError):
-        pass
-    return None
-
-
-def encerrar_processo_por_pid(pid):
-    """Encerra o processo com o PID especificado."""
-    try:
-        if os.name == "nt":
-            # No Windows, usa taskkill
-            result = subprocess.run(
-                ["taskkill", "/PID", str(pid), "/F"],
-                capture_output=True,
-                text=True
-            )
-            return result.returncode == 0
-        else:
-            # No Unix/Linux, usa kill
-            os.kill(pid, signal.SIGTERM)
-            return True
-    except Exception:
-        return False
-
-
-def salvar_pid_em_arquivo():
-    """Salva o PID atual no arquivo .agenda_server.pid."""
-    try:
-        PID_FILE.write_text(str(os.getpid()))
-    except Exception:
-        pass
-
-
-def remover_pid_arquivo_se_for_deste_processo():
-    """Remove o arquivo PID se ele pertencer a este processo."""
-    try:
-        if PID_FILE.exists():
-            pid_arquivo = int(PID_FILE.read_text().strip())
-            if pid_arquivo == os.getpid():
-                PID_FILE.unlink()
-    except (ValueError, IOError):
-        pass
 
 
 def main():
