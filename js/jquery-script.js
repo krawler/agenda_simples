@@ -227,6 +227,7 @@ $(document).ready(function() {
     eventSource = new EventSource('/sync-stream');
     $("#sync-google").prop('disabled', true);
     $("#sync-google").addClass('skeleton');
+    $(".loading-infinity").show();
 
     eventSource.onmessage = function(event) {
       try {
@@ -282,6 +283,7 @@ $(document).ready(function() {
         eventSource.close();
         $("#sync-google").prop('disabled', false);
         $("#sync-google").removeClass('skeleton');
+        $(".loading-infinity").hide();
       }
     };
 
