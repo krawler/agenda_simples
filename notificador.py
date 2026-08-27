@@ -18,6 +18,8 @@ Configuração via variáveis de ambiente (ou um arquivo .env ao lado do script)
   TELEGRAM_BOT_TOKEN    token do seu bot (@BotFather no Telegram)
   TELEGRAM_CHAT_ID      chat_id destinatário
 
+  NOTIFICACAO_EMAIL     true/false — envia e-mail de alerta (padrão: true)
+
 Uso:
   python notificador.py                 # loop: checa a cada 60s e envia
   python notificador.py --once          # checa uma vez e sai (Agendador/cron)
@@ -182,8 +184,11 @@ def processar(cfg, dry_run=False):
     enviados = carregar_enviados()
     novos = 0
 
+    # Verifica se deve enviar e-mail pelo .env
+    notificar_email = os.environ.get("NOTIFICACAO_EMAIL", "true").lower() not in ("false", "0", "no", "")
+
     # E-mail: 60 minutos (1 hora) antes
-    if "email" in cfg:
+    if "email" in cfg and notificar_email:
         janela_email = agenda.expandir(agenda.carregar(), agora,
                                        agora + timedelta(minutes=ALERTA_EMAIL))
         for occ, e in janela_email:
@@ -255,6 +260,11 @@ def main():
     if args.test is not None:
         if "email" not in cfg:
             sys.exit("SMTP não configurado.")
+        # Respeita NOTIFICACAO_EMAIL mesmo no teste
+        notificar_email = os.environ.get("NOTIFICACAO_EMAIL", "true").lower() not in ("false", "0", "no", "")
+        if not notificar_email:
+            print("NOTIFICACAO_EMAIL está desativado no .env. Nenhum e-mail será enviado.")
+            return
         msg = EmailMessage()
         msg["Subject"] = "✅ Teste — Agenda Simples"
         msg["From"] = cfg["email"]["from"]

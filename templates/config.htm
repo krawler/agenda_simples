@@ -248,6 +248,27 @@
 </div>
 
 <script>
+  // Função de beep via Web Audio API (emitido pelo JavaScript diretamente na página)
+  function tocarBeep() {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      gain.gain.setValueAtTime(0.1, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.3);
+    } catch (e) {
+      console.warn('Não foi possível tocar o beep:', e);
+    }
+  }
+
   // Inicializa a página de configurações
   document.addEventListener('DOMContentLoaded', function() {
     carregarConfiguracoes();
