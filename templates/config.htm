@@ -72,6 +72,12 @@
       </h3>
       <div class="space-y-4">
         <div class="form-control w-full">
+          <label class="label cursor-pointer flex items-center gap-2">
+            <span class="label-text">Enviar e-mail como notificação</span>
+            <input type="checkbox" class="checkbox checkbox-primary" id="notificacao-email" checked>
+          </label>
+        </div>
+        <div class="form-control w-full">
           <label class="label">
             <span class="label-text">Minutos de antecedência para alertas</span>
           </label>
@@ -382,6 +388,16 @@
     // Semana início segunda
     document.getElementById('semana-inicio-segunda').checked = localStorage.getItem('semanaInicioSegunda') === 'true';
     
+    // Notificação e-mail (lê do .env via endpoint)
+    fetch('/env-config')
+      .then(r => r.json())
+      .then(data => {
+        document.getElementById('notificacao-email').checked = data.notificacao_email !== false;
+      })
+      .catch(() => {
+        document.getElementById('notificacao-email').checked = true;
+      });
+    
     // Alertas
     const alertas = JSON.parse(localStorage.getItem('alertasMinutos') || '[60,30,15]');
     document.querySelectorAll('input[type="checkbox"][value="60"], input[type="checkbox"][value="30"], input[type="checkbox"][value="15"], input[type="checkbox"][value="5"]').forEach(cb => {
@@ -430,6 +446,13 @@
     
     // Semana início segunda
     localStorage.setItem('semanaInicioSegunda', document.getElementById('semana-inicio-segunda').checked);
+    
+    // Notificação e-mail (salva no .env via endpoint)
+    fetch('/save-env', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({notificacao_email: document.getElementById('notificacao-email').checked})
+    });
     
     // Alertas
     const alertas = [];
