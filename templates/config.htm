@@ -102,6 +102,12 @@
         </div>
         <div class="form-control w-full">
           <label class="label cursor-pointer flex items-center gap-2">
+            <span class="label-text">Enviar notificação quando o evento atingir metade do tempo</span>
+            <input type="checkbox" class="checkbox checkbox-primary" id="notificacao-metade-evento">
+          </label>
+        </div>
+        <div class="form-control w-full">
+          <label class="label cursor-pointer flex items-center gap-2">
             <span class="label-text">Notificações do navegador (requer permissão)</span>
             <input type="checkbox" class="checkbox checkbox-primary" id="notificacoes-navegador">
           </label>
@@ -383,6 +389,7 @@
     });
     
     document.getElementById('som-alertas').checked = localStorage.getItem('somAlertas') !== 'false';
+    document.getElementById('notificacao-metade-evento').checked = localStorage.getItem('notificacaoMeioEvento') === 'true';
     if (!('Notification' in window)) {
       document.getElementById('notificacoes-navegador').checked = false;
       localStorage.setItem('notificacoesNavegador', 'false');
@@ -432,6 +439,7 @@
     localStorage.setItem('alertasMinutos', JSON.stringify(alertas));
     
     localStorage.setItem('somAlertas', document.getElementById('som-alertas').checked);
+    localStorage.setItem('notificacaoMeioEvento', document.getElementById('notificacao-metade-evento').checked);
     localStorage.setItem('notificacoesNavegador', document.getElementById('notificacoes-navegador').checked);
     
     // Google Calendar
@@ -571,6 +579,7 @@
       localStorage.removeItem('semanaInicioSegunda');
       localStorage.removeItem('alertasMinutos');
       localStorage.removeItem('somAlertas');
+      localStorage.removeItem('notificacaoMeioEvento');
       localStorage.removeItem('notificacoesNavegador');
       localStorage.removeItem('syncAuto');
       localStorage.removeItem('syncBidirecional');
