@@ -19,6 +19,7 @@ from inc.handler_logic import (
     parse_alerts_minutes,
     parse_event_form,
 )
+from renderers import render_evento_item
 
 
 class DummyAgenda:
@@ -149,6 +150,12 @@ class HandlerLogicTests(unittest.TestCase):
         self.assertEqual(info["desc"], "nota")
         self.assertEqual(info["dur"], None)
         self.assertEqual(info["repeat"], None)
+
+    def test_render_evento_item_exposes_meeting_duration_in_minutes(self):
+        occ = __import__("datetime").datetime(2026, 8, 25, 9, 0)
+        html = render_evento_item(occ, {"id": 1, "titulo": "Reunião", "dur": 90, "desc": "", "repeat": None})
+        self.assertIn('data-dur-min="90"', html)
+        self.assertNotIn('data-dur-min="-09:30"', html)
 
     def test_merge_event_update_applies_status(self):
         class AgendaStub:
