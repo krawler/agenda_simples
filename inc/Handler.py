@@ -2,11 +2,13 @@
 """Handler HTTP da interface web da agenda simples."""
 
 import json
+import traceback
 import time as time_module
 from datetime import date, datetime, time
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
+import renderers
 from inc.handler_logic import (
 	build_nearby_events_payload,
 	import_events,
@@ -19,25 +21,41 @@ from inc.handler_logic import (
 class Handler(BaseHTTPRequestHandler):
 	protocol_version = "HTTP/1.1"
 
+	# Modo de desenvolvimento: quando True, inclui traceback completo nas respostas 500.
+	DEBUG = True
+
 	agenda = None
-	render_calendar = None
-	render_controls = None
-	render_day_panel = None
-	render_alerts_banner = None
-	render_proximos_eventos_dia = None
-	render_sync_status = None
-	render_page = None
-	load_config_template = None
+	render_calendar = staticmethod(renderers.render_calendar)
+	render_controls = staticmethod(renderers.render_controls)
+	render_day_panel = staticmethod(renderers.render_day_panel)
+	render_alerts_banner = staticmethod(renderers.render_alerts_banner)
+	render_proximos_eventos_dia = staticmethod(renderers.render_proximos_eventos_dia)
+	render_sync_status = staticmethod(renderers.render_sync_status)
+	render_page = staticmethod(renderers.render_page)
+	load_config_template = staticmethod(renderers.load_config_template)
 	sse_clients = None
 	sse_lock = None
 	restart_state = None
 	server_instance = None
-	templates_dir = None
+	templates_dir = renderers.TEMPLATES_DIR
 
 	@classmethod
 	def configure(cls, **kwargs):
+		render_keys = {
+			"render_calendar",
+			"render_controls",
+			"render_day_panel",
+			"render_alerts_banner",
+			"render_proximos_eventos_dia",
+			"render_sync_status",
+			"render_page",
+			"load_config_template",
+		}
 		for key, value in kwargs.items():
-			setattr(cls, key, value)
+			if key in render_keys and callable(value):
+				setattr(cls, key, staticmethod(value))
+			else:
+				setattr(cls, key, value)
 
 	def handle(self):
 		try:
@@ -94,61 +112,67 @@ class Handler(BaseHTTPRequestHandler):
 		u = urlparse(self.path)
 		q = parse_qs(u.query)
 
-		if u.path.startswith("/js/"):
-			self._serve_static_js(u.path.lstrip("/"))
-			return
-
-		match u.path:
-			case "/":
-				self._send(self.render_page(date.today()))
-			case "/__dev_status":
-				self._send_json({
-					"ok": True,
-					"pid": __import__("os").getpid(),
-					"restart_em_andamento": self.restart_state["value"],
-					"sse_clients": len(self.sse_clients),
-					"timestamp": time_module.time(),
-				})
-			case "/__dev_stop":
-				self._send_json({"ok": True, "msg": "Encerrando servidor..."})
-				if self.server_instance["value"] is not None:
-					import threading
-					threading.Thread(target=self.server_instance["value"].shutdown, daemon=True).start()
-			case "/day":
-				d = self._parse_date(q.get("date", [""])[0])
-				self._send(self.render_day_panel(d))
-			case "/edit":
-				d = self._parse_date(q.get("date", [""])[0])
-				eid = int(q.get("id", ["0"])[0])
-				self._send(self.render_day_panel(d, editando=eid))
-			case "/calendar":
-				try:
-					ano = int(q.get("year", [date.today().year])[0])
-					mes = int(q.get("month", [date.today().month])[0])
-					sel = self._parse_date(q.get("sel", [""])[0])
-					self._send(self.render_calendar(ano, mes, sel))
-				except ValueError:
-					ano = date.today().year
-					mes = max(1, min(12, date.today().month))
-					sel = self._parse_date(q.get("sel", [""])[0])
-					self._send(self.render_calendar(ano, mes, sel))
-			case "/alerts":
-				d = date.today()
-				alerts_banner = self.render_alerts_banner()
-				proximos_eventos = self.render_proximos_eventos_dia(d)
-				self._send(alerts_banner + proximos_eventos)
-			case "/config":
-				self._send(self.load_config_template())
-			case "/sync-stream":
-				self._stream_sync_status()
-			case "/export":
-				self._exportar_eventos()
-			case "/live-refresh":
-				self._stream_live_refresh()
-			case "/api/eventos-proximos":
-				self._api_eventos_proximos()
-			case _:
-				self._send("<h1>404</h1>", 404)
+		try:
+			if u.path.startswith("/js/"):
+				self._serve_static_js(u.path.lstrip("/"))
+				return
+			match u.path:
+				case "/":
+					self._send(self.render_page(date.today()))
+				case "/__dev_status":
+					self._send_json({
+						"ok": True,
+						"pid": __import__("os").getpid(),
+						"restart_em_andamento": self.restart_state["value"],
+						"sse_clients": len(self.sse_clients),
+						"timestamp": time_module.time(),
+					})
+				case "/__dev_stop":
+					self._send_json({"ok": True, "msg": "Encerrando servidor..."})
+					if self.server_instance["value"] is not None:
+						import threading
+						threading.Thread(target=self.server_instance["value"].shutdown, daemon=True).start()
+				case "/day":
+					d = self._parse_date(q.get("date", [""])[0])
+					self._send(self.render_day_panel(d))
+				case "/edit":
+					d = self._parse_date(q.get("date", [""])[0])
+					eid = int(q.get("id", ["0"])[0])
+					self._send(self.render_day_panel(d, editando=eid))
+				case "/calendar":
+					try:
+						ano = int(q.get("year", [date.today().year])[0])
+						mes = int(q.get("month", [date.today().month])[0])
+						sel = self._parse_date(q.get("sel", [""])[0])
+						self._send(self.render_calendar(ano, mes, sel))
+					except ValueError:
+						ano = date.today().year
+						mes = max(1, min(12, date.today().month))
+						sel = self._parse_date(q.get("sel", [""])[0])
+						self._send(self.render_calendar(ano, mes, sel))
+				case "/alerts":
+					d = date.today()
+					alerts_banner = self.render_alerts_banner()
+					proximos_eventos = self.render_proximos_eventos_dia(d)
+					self._send(alerts_banner + proximos_eventos)
+				case "/config":
+					self._send(self.load_config_template())
+				case "/sync-stream":
+					self._stream_sync_status()
+				case "/export":
+					self._exportar_eventos()
+				case "/live-refresh":
+					self._stream_live_refresh()
+				case "/api/eventos-proximos":
+					self._api_eventos_proximos()
+				case _:
+					self._send("<h1>404</h1>", 404)
+		except Exception as ex:
+			tb = traceback.format_exc()
+			try:
+				self._send(f"<h1>500: Internal Server Error</h1><pre>{tb}</pre>", 500)
+			except Exception:
+				pass
 
 	def do_POST(self):
 		from urllib.parse import parse_qs, urlparse
@@ -158,25 +182,31 @@ class Handler(BaseHTTPRequestHandler):
 		tamanho = int(self.headers.get("Content-Length", 0))
 		corpo = self.rfile.read(tamanho).decode("utf-8") if tamanho else ""
 		form = {k: v[0] for k, v in parse_qs(corpo).items()}
-
-		if u.path == "/event":
-			self._criar_evento(form)
-		elif u.path == "/update":
-			self._atualizar_evento(form)
-		elif u.path == "/delete":
-			self._remover_evento(q)
-		elif u.path == "/skip":
-			self._pular_ocorrencia(q)
-		elif u.path == "/sync":
-			self._sincronizar_google()
-		elif u.path == "/import":
-			self._importar_eventos(corpo)
-		elif u.path == "/sync-test":
-			self._testar_conexao_google()
-		elif u.path == "/google-reauth":
-			self._reautenticar_google()
-		else:
-			self._send("<h1>404</h1>", 404)
+		try:
+			if u.path == "/event":
+				self._criar_evento(form)
+			elif u.path == "/update":
+				self._atualizar_evento(form)
+			elif u.path == "/delete":
+				self._remover_evento(q)
+			elif u.path == "/skip":
+				self._pular_ocorrencia(q)
+			elif u.path == "/sync":
+				self._sincronizar_google()
+			elif u.path == "/import":
+				self._importar_eventos(corpo)
+			elif u.path == "/sync-test":
+				self._testar_conexao_google()
+			elif u.path == "/google-reauth":
+				self._reautenticar_google()
+			else:
+				self._send("<h1>404</h1>", 404)
+		except Exception as ex:
+			tb = traceback.format_exc()
+			try:
+				self._send(f"<h1>500: Internal Server Error</h1><pre>{tb}</pre>", 500)
+			except Exception:
+				pass
 
 	def _stream_sync_status(self):
 		self.send_response(200)
