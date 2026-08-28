@@ -169,50 +169,91 @@ function verificarEventosProximos() {
     });
 }
 
-function verificarEventosMetadeTempo() {
-  if (!('Notification' in window)) {
-    return;
-  }
 
-  if (Notification.permission !== 'granted') {
-    return;
-  }
+// Schedule per-event half-time alerts using DOM data attributes.
+window.__halfTimeTimers = window.__halfTimeTimers || {};
 
-  var notificacoesHabilitadas = localStorage.getItem('notificacoesNavegador') === 'true';
-  if (!notificacoesHabilitadas) {
-    return;
+function halfTimeNotificationsEnabled() {
+  try {
+    return localStorage.getItem('notificacaoMeioEvento') === 'true';
+  } catch (e) {
+    return false;
   }
+}
 
-  fetch('/api/eventos-metade-tempo')
-    .then(function(response) {
-      return response.json();
-    })
-    .then(function(data) {
-      if (!data || !data.eventos || !data.eventos.length) {
+function clearHalfTimeAlerts() {
+  Object.keys(window.__halfTimeTimers || {}).forEach(function(id) {
+    var timer = window.__halfTimeTimers[id];
+    if (timer) {
+      clearTimeout(timer);
+    }
+    delete window.__halfTimeTimers[id];
+  });
+}
+
+function scheduleHalfTimeAlerts(root) {
+  try {
+    if (!halfTimeNotificationsEnabled()) {
+      clearHalfTimeAlerts();
+      return;
+    }
+
+    var container = root || document;
+    var items = container.querySelectorAll('[data-occ-iso][data-dur-min]');
+    var now = Date.now();
+    items.forEach(function(node) {
+      var occIso = node.getAttribute('data-occ-iso');
+      var durMin = Number(node.getAttribute('data-dur-min') || 0);
+      if (!occIso || !durMin) return;
+      var start = Date.parse(occIso);
+      if (isNaN(start)) return;
+      var halfMs = start + (durMin * 60000 / 2);
+      var id = node.getAttribute('data-occ-iso') + '|' + durMin;
+      // If half already passed, skip
+      if (halfMs <= now) {
         return;
       }
-
-      data.eventos.forEach(function(evento) {
-        dispararNotificacao(
-          '⏱️ ' + evento.titulo,
-          'Já se passaram ' + evento.minutos_passados + ' minutos de ' + evento.duracao_minutos + ' minutos',
-          '/favicon.ico'
-        );
-        // Emitir beep
+      // If timer already scheduled, skip
+      if (window.__halfTimeTimers[id]) return;
+      var delay = Math.max(0, halfMs - now);
+      var t = setTimeout(function() {
+        // Fire notification
         try {
-          if (window.speechSynthesis) {
-            var utterance = new SpeechSynthesisUtterance('Alerta: ' + evento.titulo + ', já se passaram ' + evento.minutos_passados + ' minutos');
-            utterance.volume = 0.5;
-            speechSynthesis.speak(utterance);
+          if (Notification.permission === 'granted' && halfTimeNotificationsEnabled()) {
+            var titulo = node.querySelector('.font-medium a') ? node.querySelector('.font-medium a').textContent.trim() : 'Evento';
+            dispararNotificacao('⏱️ ' + titulo, 'Evento ' + titulo + ' alcançou a metade do tempo', '/favicon.ico');
           }
-        } catch (e) {
-          // Silencia falhas
+          // speech
+          try {
+            if (window.speechSynthesis && halfTimeNotificationsEnabled()) {
+              var utter = new SpeechSynthesisUtterance('Evento ' + (node.textContent || 'evento') + ' alcançou a metade do tempo');
+              utter.volume = 0.5;
+              speechSynthesis.speak(utter);
+            }
+          } catch (e) {}
+        } finally {
+          delete window.__halfTimeTimers[id];
         }
-      });
-    })
-    .catch(function() {
-      // Silencia falhas de consulta sem quebrar a UI.
+      }, delay);
+      window.__halfTimeTimers[id] = t;
     });
+  } catch (e) {
+    // ignore
+  }
+}
+
+// Run on initial load
+document.addEventListener('DOMContentLoaded', function() {
+  scheduleHalfTimeAlerts(document);
+  // Inicializa contadores de alerta se existirem (usa a classe correta)
+});
+
+// Re-schedule after HTMX swaps (day panel updates)
+if (window.htmx && htmx.on) {
+  htmx.on('afterSwap', function(evt) {
+    updateAlertCountdowns();
+    scheduleHalfTimeAlerts(document);
+  });
 }
 
 $(document).ready(function() {
@@ -303,6 +344,7 @@ $(document).ready(function() {
       }
       $("#sync-google").prop('disabled', false);
       $("#sync-google").removeClass('skeleton');
+      $(".loading-infinity").hide();
       var detailsLinkHtml = (window.syncLogsData && window.syncLogsData.length) ? ' <a href="#" class="link link-hover text-xs ml-2" onclick="openSyncDetailsModal(); return false;">Exibir</a>' : '';
       $("#sync-status-detail").html('Sincronização interrompido' + detailsLinkHtml);
     });
@@ -398,6 +440,7 @@ $(document).ready(function() {
   }
 
   function updateAlertCountdowns() {
+    console.log('[agenda] updateAlertCountdowns: called');
     var now = Date.now();
 
     $('.js-alert-countdown').each(function() {
@@ -429,12 +472,24 @@ $(document).ready(function() {
           secondEl.setAttribute('aria-label', '');
           secondEl.style.setProperty('--value', '0');
         }
+        this.parentElement.parentElement.parentElement.style.display = 'none';
         return;
       }
 
       var hours = Math.floor(remainingSeconds / 3600);
       var minutes = Math.floor((remainingSeconds % 3600) / 60);
       var seconds = remainingSeconds % 60;
+
+      // debug: report that we updated this countdown
+      try {
+        if (this && this.getAttribute) {
+          // only log once per element per run to avoid noisy output
+          if (!this.__loggedCountdown) {
+            console.log('[agenda] updateAlertCountdowns: updating countdown for', this.getAttribute('data-occ-iso'));
+            this.__loggedCountdown = true;
+          }
+        }
+      } catch (e) {}
 
       if (hourEl) {
         hourEl.textContent = String(hours).padStart(2, '0');
@@ -455,6 +510,7 @@ $(document).ready(function() {
   }
 
   function initAlertCountdowns() {
+    console.log('[agenda] initAlertCountdowns: called');
     updateAlertCountdowns();
     if (window.__agendaAlertCountdownInterval) {
       return;
@@ -477,10 +533,7 @@ $(document).ready(function() {
   initAlertCountdowns();
   initNotificacoes();
   verificarEventosProximos();
-  verificarEventosMetadeTempo();
   window.__agendaNotificationInterval = setInterval(verificarEventosProximos, 60000);
-  window.__agendaMetadeTempoInterval = setInterval(verificarEventosMetadeTempo, 60000);
-
   $("#sync-google").on("click", function(event) {
     event.preventDefault();
     startSyncStream();
