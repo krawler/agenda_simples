@@ -94,6 +94,46 @@ window.solicitarPermissaoNotificacao = function solicitarPermissaoNotificacao() 
   });
 };
 
+function emitirSomAlerta() {
+  try {
+    if (!('AudioContext' in window || 'webkitAudioContext' in window)) {
+      return;
+    }
+
+    var AudioCtor = window.AudioContext || window.webkitAudioContext;
+    var context = window.__agendaAlertAudioContext || new AudioCtor();
+    if (!context) {
+      return;
+    }
+
+    if (context.state === 'suspended') {
+      context.resume();
+    }
+
+    var oscillator = context.createOscillator();
+    var gain = context.createGain();
+    oscillator.type = 'triangle';
+    oscillator.frequency.value = 880;
+    gain.gain.value = 0.0001;
+
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+
+    var now = context.currentTime;
+    gain.gain.exponentialRampToValueAtTime(0.12, now + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.25);
+
+    oscillator.start(now);
+    oscillator.stop(now + 0.25);
+
+    window.__agendaAlertAudioContext = context;
+  } catch (e) {
+    // Silencia falhas de áudio sem quebrar a UI.
+  }
+}
+
+window.__agendaEventosAvisados = window.__agendaEventosAvisados || {};
+
 function dispararNotificacao(titulo, mensagem, icone) {
   if (Notification.permission !== 'granted') {
     return;
@@ -105,6 +145,8 @@ function dispararNotificacao(titulo, mensagem, icone) {
     requireInteraction: true,
     tag: 'agenda-notificacao'
   });
+
+  emitirSomAlerta();
 
   notificacao.onclick = function() {
     window.focus();
@@ -157,6 +199,12 @@ function verificarEventosProximos() {
       }
 
       data.eventos.forEach(function(evento) {
+        var chave = [evento.id, evento.minutos_restantes, evento.hora].join('|');
+        if (window.__agendaEventosAvisados[chave]) {
+          return;
+        }
+
+        window.__agendaEventosAvisados[chave] = true;
         dispararNotificacao(
           '⏰ ' + evento.titulo,
           'Evento em ' + evento.minutos_restantes + ' minutos (' + evento.hora + ')',
