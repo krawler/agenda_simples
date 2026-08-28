@@ -160,6 +160,44 @@ function dispararNotificacao(titulo, mensagem, icone) {
   }, 10000);
 }
 
+function atualizarBannerAlertasSeNecessario(data) {
+  if (!data || !data.eventos || !data.eventos.length) {
+    return;
+  }
+
+  var deveExibir = data.eventos.some(function(evento) {
+    return evento.minutos_restantes === 30 || evento.minutos_restantes === 15;
+  });
+
+  if (!deveExibir) {
+    return;
+  }
+
+  var banner = document.getElementById('alerts-banner');
+  if (banner && banner.style.display === 'none') {
+    banner.style.display = '';
+  }
+
+  var container = document.getElementById('alerts-container');
+  if (!container) {
+    return;
+  }
+
+  fetch('/alerts')
+    .then(function(response) {
+      if (!response.ok) {
+        throw new Error('Falha ao recarregar alertas');
+      }
+      return response.text();
+    })
+    .then(function(html) {
+      container.innerHTML = html;
+    })
+    .catch(function() {
+      // Silencia falha de render sem quebrar a UI.
+    });
+}
+
 function verificarEventosProximos() {
   if (!('Notification' in window)) {
     return;
@@ -197,6 +235,8 @@ function verificarEventosProximos() {
       if (!data || !data.eventos || !data.eventos.length) {
         return;
       }
+
+      atualizarBannerAlertasSeNecessario(data);
 
       data.eventos.forEach(function(evento) {
         var chave = [evento.id, evento.minutos_restantes, evento.hora].join('|');
