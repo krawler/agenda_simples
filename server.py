@@ -124,7 +124,13 @@ def main():
                    help="Endereço de escuta. Use 0.0.0.0 para aceitar conexões externas.")
     p.add_argument("--stop", action="store_true",
                    help="Encerra o servidor em execução usando o arquivo PID e sai.")
+    p.add_argument("--no-live-refresh", action="store_true",
+                   help="Desativa o monitor de arquivos e reinício automático (útil para depuração).")
     args = p.parse_args()
+
+    # Habilita no-live-refresh quando variável de ambiente estiver presente
+    if os.environ.get("DEV_NO_LIVEREFRESH"):
+        args.no_live_refresh = True
 
     Handler.configure(
         agenda=agenda,
@@ -159,9 +165,10 @@ def main():
             print(f"Não foi possível encerrar o PID {pid}.")
         return
     
-    # Inicia thread de monitoramento de arquivos
-    monitor_thread = threading.Thread(target=monitorar_arquivos, daemon=True)
-    monitor_thread.start()
+    # Inicia thread de monitoramento de arquivos (salvo quando desativado)
+    if not args.no_live_refresh:
+        monitor_thread = threading.Thread(target=monitorar_arquivos, daemon=True)
+        monitor_thread.start()
     
     try:
         srv = ReusableThreadingHTTPServer((args.host, args.port), Handler)
