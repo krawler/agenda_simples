@@ -92,6 +92,13 @@ class RoutesHandlerTests(unittest.TestCase):
         statuses = [r for r in handler.responses if r[0] == "status"]
         self.assertTrue(any(s[1] == 404 for s in statuses))
 
+    def test_get_img_asset_serves_png(self):
+        handler = self._make_handler(method="GET", path="/img/icones_separados/agenda_azul.png")
+        handler.do_GET()
+        statuses = [r for r in handler.responses if r[0] == "status"]
+        self.assertTrue(any(s[1] == 200 for s in statuses))
+        self.assertIn(b"PNG", handler.wfile.getvalue()[:8])
+
 
 if __name__ == "__main__":
     unittest.main()
