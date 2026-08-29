@@ -93,7 +93,23 @@ class Handler(BaseHTTPRequestHandler):
 		except (ValueError, TypeError):
 			return padrao or date.today()
 
-	def _serve_static_js(self, relative_path):
+	def _get_content_type(self, file_path: Path):
+		ext = file_path.suffix.lower()
+		mappings = {
+			".js": "application/javascript; charset=utf-8",
+			".css": "text/css; charset=utf-8",
+			".json": "application/json; charset=utf-8",
+			".png": "image/png",
+			".jpg": "image/jpeg",
+			".jpeg": "image/jpeg",
+			".gif": "image/gif",
+			".svg": "image/svg+xml",
+			".webp": "image/webp",
+			".ico": "image/x-icon",
+		}
+		return mappings.get(ext, "application/octet-stream")
+
+	def _serve_static_file(self, relative_path, *, fallback_content_type=None):
 		root = Path(__file__).resolve().parents[1]
 		file_path = (root / relative_path).resolve()
 		if not file_path.is_file() or root not in file_path.parents and file_path != root:
@@ -101,10 +117,13 @@ class Handler(BaseHTTPRequestHandler):
 			return
 		data = file_path.read_bytes()
 		self.send_response(200)
-		self.send_header("Content-Type", "application/javascript; charset=utf-8")
+		self.send_header("Content-Type", fallback_content_type or self._get_content_type(file_path))
 		self.send_header("Content-Length", str(len(data)))
 		self.end_headers()
 		self.wfile.write(data)
+
+	def _serve_static_js(self, relative_path):
+		self._serve_static_file(relative_path, fallback_content_type="application/javascript; charset=utf-8")
 
 	def do_GET(self):
 		from urllib.parse import parse_qs, urlparse
@@ -115,6 +134,9 @@ class Handler(BaseHTTPRequestHandler):
 		try:
 			if u.path.startswith("/js/"):
 				self._serve_static_js(u.path.lstrip("/"))
+				return
+			if u.path.startswith("/img/") or u.path == "/favicon.ico":
+				self._serve_static_file(u.path.lstrip("/"))
 				return
 			match u.path:
 				case "/":
