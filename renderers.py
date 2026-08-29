@@ -66,6 +66,7 @@ def render_calendar(ano, mes, sel):
     prev_ano, prev_mes = (ano - 1, 12) if mes == 1 else (ano, mes - 1)
     next_ano, next_mes = (ano + 1, 1) if mes == 12 else (ano, mes + 1)
     com_eventos = dias_com_eventos(ano, mes)
+    contagem_eventos = contagem_eventos_por_dia(ano, mes)
 
     cabecalho = "".join(f'<div class="text-center text-xs font-semibold '
                         f'opacity-60 py-1">{d}</div>' for d in WEEKDAYS)
@@ -86,12 +87,21 @@ def render_calendar(ano, mes, sel):
                            "gap-0", "h-12", "relative"]
             elif d == hoje:
                 classes.append("ring ring-primary ring-1")
+            contagem = contagem_eventos.get(d, 0)
+            count_html = ''
+            if contagem > 0:
+                count_html = (
+                    f'<span class="leading-none mt-0.5" '
+                    f'style="font-size: 10px; line-height: 1; opacity: 0.7;">'
+                    f'{contagem}</span>'
+                )
             ponto = ('<span class="w-1.5 h-1.5 rounded-full bg-accent absolute '
                      'bottom-1"></span>') if d in com_eventos else ""
             celulas.append(
                 f'<button class="{" ".join(classes)}" '
                 f'hx-get="/day?date={iso}" hx-target="#day-panel">'
-                f'<span>{dia}</span>{ponto}</button>')
+                f'<div class="flex items-center justify-center gap-1">'
+                f'<span>{dia}</span>{count_html}</div>{ponto}</button>')
 
     return _render_template(
         "calendar.html",
@@ -119,6 +129,17 @@ def dias_com_eventos(ano, mes):
     wstart = datetime.combine(date(ano, mes, 1), time.min)
     wend = datetime.combine(date(ano, mes, ultimo), time.max)
     return {occ.date() for occ, _ in agenda.expandir(agenda.carregar(), wstart, wend)}
+
+
+def contagem_eventos_por_dia(ano, mes):
+    ultimo = calmod.monthrange(ano, mes)[1]
+    wstart = datetime.combine(date(ano, mes, 1), time.min)
+    wend = datetime.combine(date(ano, mes, ultimo), time.max)
+    contagem = {}
+    for occ, _ in agenda.expandir(agenda.carregar(), wstart, wend):
+        dia = occ.date()
+        contagem[dia] = contagem.get(dia, 0) + 1
+    return contagem
 
 
 def render_controls(ano_atual=None):
