@@ -162,6 +162,12 @@ def render_evento_item(occ, e):
 
     status_indicador = ""
     agora = datetime.now()
+    progresso = 0
+    if e.get("dur") and occ:
+        duracao_segundos = e["dur"] * 60
+        passado_segundos = (agora - occ).total_seconds()
+        progresso = max(0, min(100, int((passado_segundos / duracao_segundos) * 100)))
+
     if e.get("cancelado"):
         status_indicador = '<span class="text-red-400 font-medium">(evento cancelado)</span>'
     elif e.get("concluido") and occ > agora:
@@ -193,6 +199,7 @@ def render_evento_item(occ, e):
         occ=occ,
         dur=dur,
         duracao_minutos=e.get("dur"),
+        progresso=progresso,
         editar=editar,
         badges=badges,
         status_indicador=status_indicador,
