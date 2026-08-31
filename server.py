@@ -29,6 +29,7 @@ from urllib.parse import parse_qs, urlparse
 from pathlib import Path
 
 import agenda  # reaproveita carregar/salvar/expandir/proximo_id/FMT/REPEATS/...
+import ideias
 
 WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"]
 TEMAS = ["light", "dark", "cupcake", "corporate", "emerald", "synthwave",
@@ -804,130 +805,52 @@ def load_config_template():
 
 
 def render_planos_ideias():
-    return '''<div class="join">
-                <div>
-                  <div style="min-width: 50rem;">
-                    <input class="input join-item" type="text" style="width: 100%;"
-                    placeholder="Qual sua nova idéia ou plano?"  />
-                  </div>
-                </div>
-                <select class="select join-item">
-                  <option disabled selected>Tipo</option>
-                  <option>Idéia</option>
-                  <option>Plano</option>
-                  <option>Tarefa</option>
-                </select>
-                <div class="indicator">
-                  <button class="btn join-item">Adicionar</button>
-                </div>
-              </div>'''
+    return '''<div id="ideas-plans-panel" class="card bg-base-100 shadow-md" data-ideas-plans>
+      <div class="card-body p-4 space-y-3">
+        <h3 class="text-lg font-bold">💡 Ideias e planos</h3>
+        <form hx-post="/idea" hx-target="#ideas-list" hx-swap="innerHTML" hx-on::after-request="this.reset()" class="space-y-3">
+          <input name="nome" required type="text" class="input input-bordered input-sm w-full" placeholder="Nome da ideia ou plano" />
+          <textarea name="descricao" class="textarea textarea-bordered textarea-sm w-full" rows="3" placeholder="Descrição (opcional)"></textarea>
+          <button type="submit" class="btn btn-primary btn-sm">Adicionar</button>
+        </form>
+      </div>
+    </div>'''
 
 
 def render_planos_ideias_table():
-    return '''<div class="w-full my-4">
-                <table class="table">
-                  <!-- head -->
-                  <thead>
-                    <tr>
-                      <th>
-                        <label>
-                          <input type="checkbox" class="checkbox" />
-                        </label>
-                      </th>
-                      <th>Identificação</th>
-                      <th>Tipo</th>
-                      <th>Descrição</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <!-- row 1 -->
-                    <tr>
-                      <th>
-                        <label>
-                          <input type="checkbox" class="checkbox" />
-                        </label>
-                      </th>
-                      <td>
-                        <div class="flex items-center gap-3">
-                          <div>
-                            <div class="font-bold">Plano de idéias</div>
-                            <div class="text-sm opacity-50 text-center">1</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td>
-                        <br />
-                        <span class="badge badge-ghost badge-sm">Plano</span>
-                      </td>
-                      <th>
-                        <button class="btn btn-ghost btn-xs">details</button>
-                      </th>
-                    </tr>
-                    <!-- row 2 -->
-                    <tr>
-                      <th>
-                        <label>
-                          <input type="checkbox" class="checkbox" />
-                        </label>
-                      </th>
-                      <td>
-                        <div class="flex items-center gap-3">
-                          <div>
-                            <div class="font-bold">OCR de palavras</div>
-                            <div class="text-sm opacity-50 text-center">2</div>
-                          </div>
-                        </div>
-                      </td>
-                        <br />
-                      <td>  
-                        <span class="badge badge-ghost badge-sm">Plano</span>
-                      </td>
-                      </td>     
-                        <span class="" style="display: ruby-text;">
-                          Criar um aplicativo que faça a leitura de palavras em imagens, 
-                          coloque bordas em volta das palavras reconhecidas e as torne 
-                          selecionaveis
-                        </span>
-                        <button class="btn btn-ghost btn-xs">details</button>
-                      
-                      </td>
-                    </tr>
-                    <!-- row 3 -->
-                    <tr>
-                      <th>
-                        <label>
-                          <input type="checkbox" class="checkbox" />
-                        </label>
-                      </th>
-                      <td>
-                        <div class="flex items-center gap-3">
-                          <div>
-                            <div class="font-bold">Novo Plano</div>
-                            <div class="text-sm opacity-50 text-center">3</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td>
-                        <br />
-                        <span class="badge badge-ghost badge-sm">Plano</span>
-                      </td>
-                      <th>
-                        <button class="btn btn-ghost btn-xs">details</button>
-                      </th>
-                    </tr>
-                  </tbody>
-                  <!-- foot -->
-                  <tfoot>
-                    <tr>
-                      <th></th>
-                      <th>Identificação</th>
-                      <th>Tipo</th>
-                      <th>Descrição</th>
-                      <th></th>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>'''
+    itens = ideias.listar_ideias()
+    if not itens:
+        return '''<div id="ideas-list" class="w-full my-4">
+          <div class="alert alert-info shadow-sm">
+            <span>Nenhuma ideia cadastrada ainda.</span>
+          </div>
+        </div>'''
+
+    linhas = ''.join(
+        f'''<tr>
+              <td class="font-semibold">{esc(item.get('id', ''))}</td>
+              <td>{esc(item.get('nome', ''))}</td>
+              <td>{esc(item.get('descricao') or '')}</td>
+            </tr>'''
+        for item in itens
+    )
+
+    return f'''<div id="ideas-list" class="w-full my-4">
+      <div class="overflow-x-auto">
+        <table class="table table-zebra table-sm w-full">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Nome</th>
+              <th>Descrição</th>
+            </tr>
+          </thead>
+          <tbody>
+            {linhas}
+          </tbody>
+        </table>
+      </div>
+    </div>'''
 
 
 def render_ideas_plans():
@@ -1175,6 +1098,8 @@ class Handler(BaseHTTPRequestHandler):
             self._remover_evento(q)
         elif u.path == "/skip":
             self._pular_ocorrencia(q)
+        elif u.path == "/idea":
+            self._salvar_ideia(form)
         elif u.path == "/sync":
             self._sincronizar_google()
         elif u.path == "/import":
@@ -1376,6 +1301,28 @@ class Handler(BaseHTTPRequestHandler):
         self._responder_com_calendario(self._parse_date(q.get("date", [""])[0]))
         # Notifica clientes sobre a mudança
         self._notificar_clientes()
+
+    def _salvar_ideia(self, form):
+        nome = (form.get("nome") or "").strip()
+        descricao = (form.get("descricao") or "").strip() or None
+
+        if not nome:
+            self._send(
+                '<div class="alert alert-error shadow-sm"><span>Informe um nome para a ideia.</span></div>',
+                400,
+            )
+            return
+
+        try:
+            ideias.criar_ideia(nome, descricao)
+        except ValueError as exc:
+            self._send(
+                f'<div class="alert alert-error shadow-sm"><span>{esc(str(exc))}</span></div>',
+                400,
+            )
+            return
+
+        self._send(render_planos_ideias_table())
 
     def _sincronizar_google(self):
         
