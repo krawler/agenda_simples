@@ -1,0 +1,15 @@
+<li class="flex items-start gap-3 p-3 rounded-lg bg-base-200">
+  <div class="text-primary font-mono font-semibold whitespace-nowrap">
+    {{ occ.strftime('%H:%M') }}{% if dur %}{{ dur }}{% endif %}
+  </div>
+  <div class="flex-1">
+    <div class="font-medium flex items-center gap-2">
+      <a {{ editar|safe }} class="hover:underline">{{ titulo }}</a> {{ badges|safe }}
+    </div>
+    {{ status_indicador|safe }}
+    {{ desc|safe }}
+  </div>
+  <div class="flex justify-end">
+    {{ acoes|safe }}
+  </div>
+</li>

@@ -1,0 +1,7 @@
+<div id="day-panel" class="card bg-base-100 shadow-md">
+  <div class="card-body p-4">
+    <h2 class="text-lg font-bold">{{ d.strftime('%d/%m/%Y') }} · {{ weekdays[(d.weekday()+1)%7] }}</h2>
+    {{ lista|safe }}
+    {{ novo_evento|safe }}
+  </div>
+</div>

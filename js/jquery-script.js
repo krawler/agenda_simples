@@ -169,6 +169,52 @@ function verificarEventosProximos() {
     });
 }
 
+function verificarEventosMetadeTempo() {
+  if (!('Notification' in window)) {
+    return;
+  }
+
+  if (Notification.permission !== 'granted') {
+    return;
+  }
+
+  var notificacoesHabilitadas = localStorage.getItem('notificacoesNavegador') === 'true';
+  if (!notificacoesHabilitadas) {
+    return;
+  }
+
+  fetch('/api/eventos-metade-tempo')
+    .then(function(response) {
+      return response.json();
+    })
+    .then(function(data) {
+      if (!data || !data.eventos || !data.eventos.length) {
+        return;
+      }
+
+      data.eventos.forEach(function(evento) {
+        dispararNotificacao(
+          '⏱️ ' + evento.titulo,
+          'Já se passaram ' + evento.minutos_passados + ' minutos de ' + evento.duracao_minutos + ' minutos',
+          '/favicon.ico'
+        );
+        // Emitir beep
+        try {
+          if (window.speechSynthesis) {
+            var utterance = new SpeechSynthesisUtterance('Alerta: ' + evento.titulo + ', já se passaram ' + evento.minutos_passados + ' minutos');
+            utterance.volume = 0.5;
+            speechSynthesis.speak(utterance);
+          }
+        } catch (e) {
+          // Silencia falhas
+        }
+      });
+    })
+    .catch(function() {
+      // Silencia falhas de consulta sem quebrar a UI.
+    });
+}
+
 $(document).ready(function() {
   var $syncStatus = $("#sync-status");
   var eventSource;
@@ -181,6 +227,7 @@ $(document).ready(function() {
     eventSource = new EventSource('/sync-stream');
     $("#sync-google").prop('disabled', true);
     $("#sync-google").addClass('skeleton');
+    $(".loading-infinity").show();
 
     eventSource.onmessage = function(event) {
       try {
@@ -203,6 +250,7 @@ $(document).ready(function() {
         var detailsLinkHtml = (data.logs && data.logs.length) ? ' <a href="#" class="link link-hover text-xs ml-2" onclick="openSyncDetailsModal(); return false;">Exibir</a>' : '';
         var interruptLinkHtml = ' <a href="#" class="link link-hover text-xs ml-2" onclick="window.interruptSync(); return false;">Interromper</a>';
         var html = '<div class="flex flex-wrap contents gap-2">'
+                  + ' <span class="loading loading-infinity loading-sm"></span>' 
                   + '  <span class="text-lg font-semibold">Sincronizando com Google Calendar:</span>'
                   + '<div class="space-y-1 max-h-60 overflow-y-auto">'
                   
@@ -235,6 +283,7 @@ $(document).ready(function() {
         eventSource.close();
         $("#sync-google").prop('disabled', false);
         $("#sync-google").removeClass('skeleton');
+        $(".loading-infinity").hide();
       }
     };
 
@@ -428,7 +477,9 @@ $(document).ready(function() {
   initAlertCountdowns();
   initNotificacoes();
   verificarEventosProximos();
+  verificarEventosMetadeTempo();
   window.__agendaNotificationInterval = setInterval(verificarEventosProximos, 60000);
+  window.__agendaMetadeTempoInterval = setInterval(verificarEventosMetadeTempo, 60000);
 
   $("#sync-google").on("click", function(event) {
     event.preventDefault();
@@ -451,6 +502,22 @@ $(document).ready(function() {
       } else {
         $form.find('button[type="submit"]').focus();
       }
+    }
+  });
+
+  // Carrega e exibe os próximos eventos ao clicar no botão
+  $(document).on('click', '#proximos-eventos-btn', function(event) {
+    event.preventDefault();
+    var $proximosContainer = $('#proximos-eventos');
+    if ($proximosContainer.length === 0) {
+      // Fetch and render the proximos eventos
+      $.get('/alerts', function(data) {
+        $('#alerts-container').html(data);
+        // Scroll to the proximos eventos section
+        $('#proximos-eventos').get(0).scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    } else {
+      $proximosContainer.get(0).scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   });
 });
