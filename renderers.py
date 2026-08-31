@@ -20,7 +20,17 @@ MESES = ["", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
 ANOS_DISPONIVEIS = [2025, 2026, 2027, 2028]
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 RENDERER_TEMPLATES_DIR = TEMPLATES_DIR / "renderers"
-env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(RENDERER_TEMPLATES_DIR)), autoescape=True)
+
+env = Environment(
+    loader=FileSystemLoader(str(RENDERER_TEMPLATES_DIR)),
+    autoescape=select_autoescape(default_for_string=False, enabled_extensions=("html", "htm", "xml")),
+)
+
+
+def _render_template(template_name, **context):
+    """Renderiza um template Jinja usando o ambiente global do módulo."""
+    template = env.get_template(template_name)
+    return template.render(**context)
 
 
 def esc(v):

@@ -206,7 +206,8 @@ class Handler(BaseHTTPRequestHandler):
 		tamanho = int(self.headers.get("Content-Length", 0))
 		corpo = self.rfile.read(tamanho).decode("utf-8") if tamanho else ""
 		form = {k: v[0] for k, v in parse_qs(corpo).items()}
-        try:  
+
+		try:
 			if u.path == "/event":
 				self._criar_evento(form)
 			elif u.path == "/update":
@@ -229,7 +230,7 @@ class Handler(BaseHTTPRequestHandler):
 				self._reautenticar_google()
 			else:
 				self._send("<h1>404</h1>", 404)
-    	except Exception as ex:
+		except Exception:
 			tb = traceback.format_exc()
 			try:
 				self._send(f"<h1>500: Internal Server Error</h1><pre>{tb}</pre>", 500)
