@@ -30,15 +30,24 @@ from pathlib import Path
 
 import agenda  # reaproveita carregar/salvar/expandir/proximo_id/FMT/REPEATS/...
 import ideias
+from renderers import (
+    render_calendar,
+    render_controls,
+    render_day_panel,
+    render_alerts_banner,
+    render_proximos_eventos_dia,
+    render_sync_status,
+    render_page,
+    load_config_template,
+)
+from inc.funcoes_agenda import (
+    ler_pid_do_arquivo,
+    encerrar_processo_por_pid,
+    salvar_pid_em_arquivo,
+    remover_pid_arquivo_se_for_deste_processo,
+)
+from inc.Handler import Handler
 
-WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"]
-TEMAS = ["light", "dark", "cupcake", "corporate", "emerald", "synthwave",
-           "dracula", "night", "coffee", "winter"]
-MESES = ["", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-           "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
-ANOS_DISPONIVEIS = [2025, 2026, 2027, 2028]
-
-# Caminho para templates
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
 # Armazenar conexões SSE ativas
@@ -48,10 +57,10 @@ sse_clients = []
 file_timestamps = {}
 
 # Flag para evitar múltiplos restarts simultâneos
-restart_em_andamento = False
+restart_state = {"value": False}
 
 # Instância global do servidor para permitir shutdown coordenado.
-server_instance = None
+server_instance_state = {"value": None}
 
 # Arquivo PID para controle do servidor em modo dev.
 PID_FILE = Path(__file__).parent / ".agenda_server.pid"
@@ -1439,7 +1448,6 @@ class ReusableThreadingHTTPServer(ThreadingHTTPServer):
 
 def monitorar_arquivos():
     """Monitora arquivos por mudanças e notifica clientes SSE."""
-    global restart_em_andamento
     arquivos_monitorados = [
         Path(__file__).parent / "eventos.json",
         Path(__file__).parent / "agenda.py",
@@ -1476,87 +1484,55 @@ def monitorar_arquivos():
                         sse_clients.remove(client)
 
             # Mudanças em .py exigem reinício do processo para aplicar novo código.
-            if precisa_reiniciar and not restart_em_andamento:
-                restart_em_andamento = True
+            if precisa_reiniciar and not restart_state["value"]:
+                restart_state["value"] = True
                 print("[live-refresh] Mudança em arquivo Python detectada. Reiniciando servidor...")
-                if server_instance is not None:
+                if server_instance_state["value"] is not None:
                     # Shutdown deve ocorrer fora da thread do servidor.
-                    threading.Thread(target=server_instance.shutdown, daemon=True).start()
-
-
-def ler_pid_do_arquivo():
-    """Lê o PID do arquivo .agenda_server.pid."""
-    try:
-        if PID_FILE.exists():
-            return int(PID_FILE.read_text().strip())
-    except (ValueError, IOError):
-        pass
-    return None
-
-
-def encerrar_processo_por_pid(pid):
-    """Encerra o processo com o PID especificado."""
-    try:
-        if os.name == "nt":
-            # No Windows, usa taskkill
-            result = subprocess.run(
-                ["taskkill", "/PID", str(pid), "/F"],
-                capture_output=True,
-                text=True
-            )
-            return result.returncode == 0
-        else:
-            # No Unix/Linux, usa kill
-            os.kill(pid, signal.SIGTERM)
-            return True
-    except Exception:
-        return False
-
-
-def salvar_pid_em_arquivo():
-    """Salva o PID atual no arquivo .agenda_server.pid."""
-    try:
-        PID_FILE.write_text(str(os.getpid()))
-    except Exception:
-        pass
-
-
-def remover_pid_arquivo_se_for_deste_processo():
-    """Remove o arquivo PID se ele pertencer a este processo."""
-    try:
-        if PID_FILE.exists():
-            pid_arquivo = int(PID_FILE.read_text().strip())
-            if pid_arquivo == os.getpid():
-                PID_FILE.unlink()
-    except (ValueError, IOError):
-        pass
+                    threading.Thread(target=server_instance_state["value"].shutdown, daemon=True).start()
 
 
 def main():
-    global server_instance
     p = argparse.ArgumentParser(description="Servidor web da agenda simples.")
     p.add_argument("--port", type=int, default=8000)
     p.add_argument("--host", default="127.0.0.1",
                    help="Endereço de escuta. Use 0.0.0.0 para aceitar conexões externas.")
     p.add_argument("--stop", action="store_true",
-            help="Encerra o servidor em execução usando o arquivo PID e sai.")
+                   help="Encerra o servidor em execução usando o arquivo PID e sai.")
     args = p.parse_args()
 
+    Handler.configure(
+        agenda=agenda,
+        render_calendar=render_calendar,
+        render_controls=render_controls,
+        render_day_panel=render_day_panel,
+        render_alerts_banner=render_alerts_banner,
+        render_proximos_eventos_dia=render_proximos_eventos_dia,
+        render_sync_status=render_sync_status,
+        render_page=render_page,
+        load_config_template=load_config_template,
+        sse_clients=sse_clients,
+        sse_lock=sse_lock,
+        restart_state=restart_state,
+        server_instance=server_instance_state,
+        templates_dir=TEMPLATES_DIR,
+    )
+
     if args.stop:
-      pid = ler_pid_do_arquivo()
-      if not pid:
-        print("Nenhum PID encontrado para encerrar.")
+        pid = ler_pid_do_arquivo()
+        if not pid:
+            print("Nenhum PID encontrado para encerrar.")
+            return
+        ok = encerrar_processo_por_pid(pid)
+        if ok:
+            print(f"Servidor encerrado (PID {pid}).")
+            try:
+                PID_FILE.unlink(missing_ok=True)
+            except Exception:
+                pass
+        else:
+            print(f"Não foi possível encerrar o PID {pid}.")
         return
-      ok = encerrar_processo_por_pid(pid)
-      if ok:
-        print(f"Servidor encerrado (PID {pid}).")
-        try:
-          PID_FILE.unlink(missing_ok=True)
-        except Exception:
-          pass
-      else:
-        print(f"Não foi possível encerrar o PID {pid}.")
-      return
     
     # Inicia thread de monitoramento de arquivos
     monitor_thread = threading.Thread(target=monitorar_arquivos, daemon=True)
@@ -1564,7 +1540,7 @@ def main():
     
     try:
         srv = ReusableThreadingHTTPServer((args.host, args.port), Handler)
-        server_instance = srv
+        server_instance_state["value"] = srv
         salvar_pid_em_arquivo()
     except PermissionError as ex:
         print(f"Erro ao abrir o servidor em {args.host}:{args.port}: {ex}")
@@ -1582,10 +1558,10 @@ def main():
             srv.server_close()
         except Exception:
             pass
-    if not restart_em_andamento:
+    if not restart_state["value"]:
       remover_pid_arquivo_se_for_deste_processo()
 
-    if restart_em_andamento:
+    if restart_state["value"]:
       creation_flags = 0
       if os.name == "nt":
         creation_flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS

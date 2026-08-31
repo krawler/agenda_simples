@@ -1,0 +1,9 @@
+<div id="proximos-eventos" class="alert alert-warning shadow-sm my-4">
+  <div class="flex items-center justify-between mb-2">
+    <span class="font-semibold" style="margin-top:.2rem">Próximos eventos de {{ label }} ({{ count }}):</span>
+  </div>
+  <div class="space-y-1 max-h-60 overflow-y-auto">
+    {{ linhas|safe }}
+  </div>
+  <button type="button" class="btn btn-xs btn-ghost btn-circle close-btn close-alert" data-close-target="proximos-eventos" title="Fechar">✕</button>
+</div>
