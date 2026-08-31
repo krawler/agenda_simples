@@ -660,7 +660,7 @@ DURACAO_MODAL_JS = """
 
 
 def render_ideas_plans(error_message=None):
-    """Renderiza a seção de ideias e planos com formulário e tabela persistida em SQLite."""
+    """Renderiza a seção de ideias e planos usando o template dedicado."""
     try:
         itens = ideias.listar_ideias()
     except Exception:
@@ -669,14 +669,17 @@ def render_ideas_plans(error_message=None):
     rows = []
     for item in itens:
         descricao = item.get("descricao") or ""
+        nome = item.get("nome", "")
+        nome_esc = esc(nome)
+        descricao_render = linkify_urls(esc(descricao)) if descricao else '<span class="opacity-50">Sem descrição</span>'
         rows.append(
             f'''<tr>
-                <td class="font-medium">{esc(item.get('nome', ''))}</td>
-                <td class="text-sm opacity-80">{linkify_urls(esc(descricao)) if descricao else '<span class="opacity-50">Sem descrição</span>'}</td>
+                <td class="font-medium">{nome_esc}</td>
+                <td class="text-sm opacity-80">{descricao_render}</td>
                 <td class="text-right">
                     <button type="button" class="btn btn-ghost btn-xs text-error"
                         hx-post="/idea/delete?id={item.get('id')}" hx-target="#ideas-plans-panel" hx-swap="outerHTML"
-                        hx-confirm="Remover a ideia '{esc(item.get('nome', ''))}'?">✕</button>
+                        hx-confirm="Remover a ideia '{nome_esc}'?">✕</button>
                 </td>
             </tr>'''
         )
@@ -686,49 +689,12 @@ def render_ideas_plans(error_message=None):
     else:
         rows_html = "".join(rows)
 
-    alert_html = ""
-    if error_message:
-        alert_html = f'''<div class="alert alert-warning shadow-sm"><span>{esc(error_message)}</span></div>'''
-
-    return f'''<div id="ideas-plans-panel" class="card bg-base-100 shadow-md">
-      <div class="card-body p-4 space-y-4">
-        <div class="flex items-center justify-between gap-2">
-          <h2 class="text-lg font-bold">💡 Ideias e planos</h2>
-          <span class="badge badge-primary badge-outline">{len(itens)}</span>
-        </div>
-        {alert_html}
-
-        <form hx-post="/idea" hx-target="#ideas-plans-panel" hx-swap="outerHTML" class="space-y-3">
-          <div class="grid gap-3 md:grid-cols-[1.3fr_1fr]">
-            <input name="nome" type="text" required placeholder="Título da ideia ou plano" class="input input-bordered input-sm w-full" />
-            <select name="tipo" class="select select-bordered select-sm w-full">
-              <option value="ideia" selected>Ideia</option>
-              <option value="plano">Plano</option>
-              <option value="evento">Evento futuro</option>
-            </select>
-          </div>
-          <textarea name="descricao" rows="3" placeholder="Detalhes, objetivos ou próximos passos..." class="textarea textarea-bordered textarea-sm w-full"></textarea>
-          <div class="flex justify-end">
-            <button type="submit" class="btn btn-primary btn-sm">Salvar</button>
-          </div>
-        </form>
-
-        <div class="overflow-x-auto">
-          <table class="table table-zebra table-sm w-full">
-            <thead>
-              <tr>
-                <th>Nome</th>
-                <th>Descrição</th>
-                <th class="text-right">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows_html}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>'''
+    return _render_template(
+        "ideas_plans.html",
+        itens=itens,
+        rows_html=rows_html,
+        error_message=error_message,
+    )
 
 
 def render_page(sel):
