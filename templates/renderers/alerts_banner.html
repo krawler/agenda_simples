@@ -3,5 +3,15 @@
     <span class="font-semibold">⚠ Eventos iniciando em 30 min:</span>
     {{ linhas|safe }}
   </div>
-  <button type="button" class="btn btn-xs btn-ghost btn-circle close-btn close-alert" data-close-target="alerts-banner" title="Fechar">✕</button>
+  <div style="justify-self:end;"> 
+      <span class="countdown font-mono text-lg js-alert-countdown"
+            data-occ-iso="{{occ_date}}">
+        <span class="js-cd-h" style="--value:0;" aria-live="polite" aria-label="0">00</span>
+        :
+        <span class="js-cd-m" style="--value:0; --digits: 2;" aria-live="polite" aria-label="0">00</span>
+        :
+        <span class="js-cd-s" style="--value:0; --digits: 2;" aria-live="polite" aria-label="0">00</span>
+      </span>
+  </div>
+  <button type="button" class="btn btn-xs btn-ghost btn-circle close-btn close-alert" style="justify-self: end;" data-close-target="alerts-banner" title="Fechar">✕</button>
 </div>

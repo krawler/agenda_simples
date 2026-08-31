@@ -132,3 +132,31 @@ pip install --upgrade google-api-python-client google-auth-httplib2 google-auth-
   outros sistemas.
 - Recorrência `monthly` usa o dia do mês do evento base; meses sem esse dia
   (ex.: dia 31) simplesmente não têm ocorrência naquele mês.
+
+## Desenvolvimento: live-reload e conexões interrompidas
+
+O servidor `server.py` inclui um monitor de arquivos que reinicia o processo
+quando detecta mudanças em arquivos Python (útil para desenvolvimento). No
+entanto, reinícios automáticos podem fechar conexões em andamento e gerar
+erros como `ERR_EMPTY_RESPONSE` no navegador ou `A conexão foi fechada de modo
+inesperado` no PowerShell.
+
+Para depurar requisições sem reinícios automáticos, inicie o servidor com:
+
+```powershell
+python server.py --no-live-refresh
+```
+
+Isto desativa o monitor de arquivos e mantém o processo estável enquanto você
+testa endpoints (recomendado durante debugging de integrações HTMX/cliente).
+
+Em produção, não use o monitor de arquivos; ele é apenas para fluxo de
+desenvolvimento.
+
+Alternativamente, defina a variável de ambiente `DEV_NO_LIVEREFRESH` para
+desativar o live-reload sem precisar passar uma flag toda vez. Exemplo (PowerShell):
+
+```powershell
+$env:DEV_NO_LIVEREFRESH = '1'
+python server.py
+```
