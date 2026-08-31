@@ -78,6 +78,7 @@ def monitorar_arquivos():
         Path(__file__).parent / "eventos.json",
         Path(__file__).parent / "agenda.py",
         Path(__file__).parent / "server.py",
+        Path(__file__).parent / "ideias.py",
         TEMPLATES_DIR / "config.htm"
     ]
     
