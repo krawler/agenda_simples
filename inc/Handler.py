@@ -7,6 +7,8 @@ from datetime import date, datetime, time
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
+import ideias
+
 from inc.handler_logic import (
 	build_nearby_events_payload,
 	import_events,
@@ -27,6 +29,7 @@ class Handler(BaseHTTPRequestHandler):
 	render_proximos_eventos_dia = None
 	render_sync_status = None
 	render_page = None
+	render_ideas_plans = None
 	load_config_template = None
 	sse_clients = None
 	sse_lock = None
@@ -139,6 +142,8 @@ class Handler(BaseHTTPRequestHandler):
 				self._send(alerts_banner + proximos_eventos)
 			case "/config":
 				self._send(self.load_config_template())
+			case "/ideas-plans":
+				self._send(self.render_ideas_plans())
 			case "/sync-stream":
 				self._stream_sync_status()
 			case "/export":
@@ -165,6 +170,10 @@ class Handler(BaseHTTPRequestHandler):
 			self._atualizar_evento(form)
 		elif u.path == "/delete":
 			self._remover_evento(q)
+		elif u.path == "/idea":
+			self._criar_ideia(form)
+		elif u.path == "/idea/delete":
+			self._remover_ideia(q)
 		elif u.path == "/skip":
 			self._pular_ocorrencia(q)
 		elif u.path == "/sync":
@@ -332,6 +341,24 @@ class Handler(BaseHTTPRequestHandler):
 			self._send_json({"ok": True, "count": count})
 		except Exception as ex:
 			self._send_json({"ok": False, "msg": str(ex)})
+
+	def _criar_ideia(self, form):
+		nome = (form.get("nome") or "").strip()
+		descricao = (form.get("descricao") or "").strip()
+		try:
+			ideias.criar_ideia(nome, descricao or None)
+		except ValueError as exc:
+			self._send(self.render_ideas_plans(error_message=str(exc)))
+			return
+		self._send(self.render_ideas_plans())
+
+	def _remover_ideia(self, q):
+		ideia_id = q.get("id", ["0"])[0]
+		try:
+			ideias.remover_ideia(int(ideia_id))
+		except Exception:
+			pass
+		self._send(self.render_ideas_plans())
 
 	def _responder_com_calendario(self, painel):
 		cal_html = self.render_calendar(painel.year, painel.month, painel)

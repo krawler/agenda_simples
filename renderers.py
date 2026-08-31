@@ -10,6 +10,7 @@ from pathlib import Path
 
 import jinja2
 import agenda
+import ideias
 
 WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"]
 TEMAS = ["light", "dark", "cupcake", "corporate", "emerald", "synthwave",
@@ -18,6 +19,8 @@ MESES = ["", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
          "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
 ANOS_DISPONIVEIS = [2025, 2026, 2027, 2028]
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
+RENDERER_TEMPLATES_DIR = TEMPLATES_DIR / "renderers"
+env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(RENDERER_TEMPLATES_DIR)), autoescape=True)
 
 
 def esc(v):
@@ -716,6 +719,78 @@ DURACAO_MODAL_JS = """
 """
 
 
+def render_ideas_plans(error_message=None):
+    """Renderiza a seção de ideias e planos com formulário e tabela persistida em SQLite."""
+    try:
+        itens = ideias.listar_ideias()
+    except Exception:
+        itens = []
+
+    rows = []
+    for item in itens:
+        descricao = item.get("descricao") or ""
+        rows.append(
+            f'''<tr>
+                <td class="font-medium">{esc(item.get('nome', ''))}</td>
+                <td class="text-sm opacity-80">{linkify_urls(esc(descricao)) if descricao else '<span class="opacity-50">Sem descrição</span>'}</td>
+                <td class="text-right">
+                    <button type="button" class="btn btn-ghost btn-xs text-error"
+                        hx-post="/idea/delete?id={item.get('id')}" hx-target="#ideas-plans-panel" hx-swap="outerHTML"
+                        hx-confirm="Remover a ideia '{esc(item.get('nome', ''))}'?">✕</button>
+                </td>
+            </tr>'''
+        )
+
+    if not rows:
+        rows_html = '<tr><td colspan="3" class="text-center py-6 opacity-60">Nenhuma ideia ou plano ainda.</td></tr>'
+    else:
+        rows_html = "".join(rows)
+
+    alert_html = ""
+    if error_message:
+        alert_html = f'''<div class="alert alert-warning shadow-sm"><span>{esc(error_message)}</span></div>'''
+
+    return f'''<div id="ideas-plans-panel" class="card bg-base-100 shadow-md">
+      <div class="card-body p-4 space-y-4">
+        <div class="flex items-center justify-between gap-2">
+          <h2 class="text-lg font-bold">💡 Ideias e planos</h2>
+          <span class="badge badge-primary badge-outline">{len(itens)}</span>
+        </div>
+        {alert_html}
+
+        <form hx-post="/idea" hx-target="#ideas-plans-panel" hx-swap="outerHTML" class="space-y-3">
+          <div class="grid gap-3 md:grid-cols-[1.3fr_1fr]">
+            <input name="nome" type="text" required placeholder="Título da ideia ou plano" class="input input-bordered input-sm w-full" />
+            <select name="tipo" class="select select-bordered select-sm w-full">
+              <option value="ideia" selected>Ideia</option>
+              <option value="plano">Plano</option>
+              <option value="evento">Evento futuro</option>
+            </select>
+          </div>
+          <textarea name="descricao" rows="3" placeholder="Detalhes, objetivos ou próximos passos..." class="textarea textarea-bordered textarea-sm w-full"></textarea>
+          <div class="flex justify-end">
+            <button type="submit" class="btn btn-primary btn-sm">Salvar</button>
+          </div>
+        </form>
+
+        <div class="overflow-x-auto">
+          <table class="table table-zebra table-sm w-full">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Descrição</th>
+                <th class="text-right">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows_html}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>'''
+
+
 def render_page(sel):
     calendar_html = render_calendar(sel.year, sel.month, sel)
     controls_html = render_controls(sel.year)
@@ -723,6 +798,7 @@ def render_page(sel):
     alerts_html = render_alerts_banner()
     sync_html = render_sync_status()
     config_modal_html = load_config_template()
+    ideas_plans_html = render_ideas_plans()
 
     template = env.get_template("page.html")
     return template.render(
@@ -732,6 +808,7 @@ def render_page(sel):
         alerts_html=alerts_html,
         sync_html=sync_html,
         config_modal_html=config_modal_html,
+        ideas_plans_html=ideas_plans_html,
         sync_details_modal=SYNC_DETAILS_MODAL,
         sync_modal_js=SYNC_MODAL_JS,
         duracao_modal_js=DURACAO_MODAL_JS

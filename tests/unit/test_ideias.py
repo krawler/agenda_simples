@@ -1,9 +1,12 @@
 import sqlite3
+import shutil
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 
 import ideias
+import renderers
 
 
 class TestIdeiasSqlite(unittest.TestCase):
@@ -14,7 +17,22 @@ class TestIdeiasSqlite(unittest.TestCase):
         ideias.init_db()
 
     def tearDown(self):
-        self.temp_dir.cleanup()
+        try:
+            if self.db_path.exists():
+                try:
+                    with sqlite3.connect(self.db_path) as conn:
+                        conn.execute("PRAGMA wal_checkpoint(FULL)")
+                except Exception:
+                    pass
+                self.db_path.unlink(missing_ok=True)
+        except PermissionError:
+            pass
+        except OSError:
+            pass
+        try:
+            shutil.rmtree(self.temp_dir.name, ignore_errors=True)
+        except Exception:
+            pass
 
     def test_tabela_ideias_existe(self):
         with sqlite3.connect(self.db_path) as conn:
@@ -48,6 +66,12 @@ class TestIdeiasSqlite(unittest.TestCase):
 
         self.assertIsNotNone(encontrada)
         self.assertEqual(encontrada["nome"], "Estudar Python")
+
+    def test_render_page_contem_secao_ideias(self):
+        html = renderers.render_page(date.today())
+
+        self.assertIn('id="ideas-plans-panel"', html)
+        self.assertIn('Ideias e planos', html)
 
 
 if __name__ == "__main__":

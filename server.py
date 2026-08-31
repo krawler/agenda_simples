@@ -38,6 +38,7 @@ from renderers import (
     render_proximos_eventos_dia,
     render_sync_status,
     render_page,
+    render_ideas_plans,
     load_config_template,
 )
 from inc.funcoes_agenda import (
@@ -137,6 +138,7 @@ def main():
         render_proximos_eventos_dia=render_proximos_eventos_dia,
         render_sync_status=render_sync_status,
         render_page=render_page,
+        render_ideas_plans=render_ideas_plans,
         load_config_template=load_config_template,
         sse_clients=sse_clients,
         sse_lock=sse_lock,
