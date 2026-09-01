@@ -37,6 +37,18 @@ def esc(v):
     return html.escape(str(v)) if v is not None else ""
 
 
+def calcular_progresso_evento(occ, duracao_minutos, agora=None):
+    """Calcula a porcentagem percorrida de um evento em tempo real."""
+    if not occ or not duracao_minutos:
+        return 0
+    if agora is None:
+        agora = datetime.now()
+    duracao_segundos = max(1, int(duracao_minutos) * 60)
+    passado_segundos = max(0.0, (agora - occ).total_seconds())
+    progresso = (passado_segundos / duracao_segundos) * 100
+    return max(0, min(100, int(progresso)))
+
+
 def linkify_urls(text):
     """Converte URLs em texto para links clicáveis."""
     if not text:
@@ -164,9 +176,7 @@ def render_evento_item(occ, e):
     agora = datetime.now()
     progresso = 0
     if e.get("dur") and occ:
-        duracao_segundos = e["dur"] * 60
-        passado_segundos = (agora - occ).total_seconds()
-        progresso = max(0, min(100, int((passado_segundos / duracao_segundos) * 100)))
+        progresso = calcular_progresso_evento(occ, e["dur"], agora)
 
     if e.get("cancelado"):
         status_indicador = '<span class="text-red-400 font-medium">(evento cancelado)</span>'
@@ -206,6 +216,7 @@ def render_evento_item(occ, e):
         desc=desc,
         acoes=acoes,
         titulo=esc(e["titulo"]),
+        event_id=e.get("id"),
     )
 
 

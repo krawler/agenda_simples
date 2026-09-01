@@ -597,13 +597,41 @@ $(document).ready(function() {
     });
   }
 
+  function updateEventProgress() {
+    var now = Date.now();
+    $('.js-event-progress').each(function() {
+      var occIso = this.getAttribute('data-occ-iso');
+      var durMin = Number(this.getAttribute('data-dur-min') || 0);
+      if (!occIso || !durMin) {
+        return;
+      }
+
+      var startTime = new Date(occIso).getTime();
+      if (isNaN(startTime)) {
+        return;
+      }
+
+      var durationMs = durMin * 60 * 1000;
+      var elapsedMs = Math.max(0, now - startTime);
+      var progress = Math.max(0, Math.min(100, Math.round((elapsedMs / durationMs) * 100)));
+
+      this.style.setProperty('--value', String(progress));
+      this.setAttribute('aria-valuenow', String(progress));
+      this.textContent = progress + '%';
+    });
+  }
+
   function initAlertCountdowns() {
     console.log('[agenda] initAlertCountdowns: called');
     updateAlertCountdowns();
+    updateEventProgress();
     if (window.__agendaAlertCountdownInterval) {
       return;
     }
-    window.__agendaAlertCountdownInterval = setInterval(updateAlertCountdowns, 1000);
+    window.__agendaAlertCountdownInterval = setInterval(function() {
+      updateAlertCountdowns();
+      updateEventProgress();
+    }, 1000);
   }
 
   document.addEventListener('click', function(event) {
