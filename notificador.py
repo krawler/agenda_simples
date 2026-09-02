@@ -184,8 +184,9 @@ def processar(cfg, dry_run=False):
     enviados = carregar_enviados()
     novos = 0
 
-    # Verifica se deve enviar e-mail pelo .env
+    # Verifica se deve enviar e-mail/Telegram pelo .env
     notificar_email = os.environ.get("NOTIFICACAO_EMAIL", "true").lower() not in ("false", "0", "no", "")
+    notificar_telegram = os.environ.get("NOTIFICACAO_TELEGRAM", "false").lower() not in ("false", "0", "no", "")
 
     # E-mail: 60 minutos (1 hora) antes
     if "email" in cfg and notificar_email:
@@ -209,7 +210,7 @@ def processar(cfg, dry_run=False):
             novos += 1
 
     # Telegram: 60 minutos (1 hora) antes (mesma frequência que e‑mail)
-    if "telegram" in cfg:
+    if "telegram" in cfg and notificar_telegram:
         janela_tg = agenda.expandir(agenda.carregar(), agora,
                                     agora + timedelta(minutes=ALERTA_TELEGRAM))
         for occ, e in janela_tg:
@@ -278,6 +279,10 @@ def main():
     if args.test_tg:
         if "telegram" not in cfg:
             sys.exit("Telegram não configurado.")
+        notificar_telegram = os.environ.get("NOTIFICACAO_TELEGRAM", "false").lower() not in ("false", "0", "no", "")
+        if not notificar_telegram:
+            print("NOTIFICACAO_TELEGRAM está desativado no .env. Nenhuma mensagem do Telegram será enviada.")
+            return
         msg = ("✅ Teste — Agenda Simples\n\n"
                "Mensagem de teste do serviço de lembretes.\n"
                "Se você recebeu, o Telegram está configurado corretamente.")
