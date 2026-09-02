@@ -10,6 +10,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 import agenda
+import ideias
 
 WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"]
 TEMAS = ["light", "dark", "cupcake", "corporate", "emerald", "synthwave",
@@ -688,4 +689,61 @@ def render_page(sel):
     sync_details_modal=SYNC_DETAILS_MODAL,
     sync_modal_js=SYNC_MODAL_JS,
     duracao_modal_js=DURACAO_MODAL_JS,
+    ideias_plans=render_ideas_plans(),
   )
+
+def render_planos_ideias_table():
+    itens = ideias.listar_ideias()
+    if not itens:
+        return '''<div id="ideas-list" class="w-full my-4">
+          <div class="alert alert-info shadow-sm">
+            <span>Nenhuma ideia cadastrada ainda.</span>
+          </div>
+        </div>'''
+
+    linhas = ''.join(
+        f'''<tr>
+              <td class="font-semibold">{esc(item.get('id', ''))}</td>
+              <td>{esc(item.get('nome', ''))}</td>
+              <td>{esc(item.get('descricao') or '')}</td>
+            </tr>'''
+        for item in itens
+    )
+
+    return f'''<div id="ideas-list" class="w-full my-4">
+      <div class="overflow-x-auto">
+        <table class="table table-zebra table-sm w-full">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Nome</th>
+              <th>Descrição</th>
+            </tr>
+          </thead>
+          <tbody>
+            {linhas}
+          </tbody>
+        </table>
+      </div>
+    </div>'''
+    
+
+def render_planos_ideias():
+    return '''<div id="ideas-plans-panel" class="card bg-base-100 shadow-md" data-ideas-plans>
+      <div class="card-body p-4 space-y-3">
+        <h3 class="text-lg font-bold">💡 Ideias e planos</h3>
+        <form hx-post="/idea" hx-target="#ideas-list" hx-swap="innerHTML" hx-on::after-request="this.reset()" class="space-y-3">
+          <input name="nome" required type="text" class="input input-bordered input-sm w-full" placeholder="Nome da ideia ou plano" />
+          <textarea name="descricao" class="textarea textarea-bordered textarea-sm w-full" rows="3" placeholder="Descrição (opcional)"></textarea>
+          <button type="submit" class="btn btn-primary btn-sm">Adicionar</button>
+        </form>
+      </div>
+    </div>'''
+
+
+def render_ideas_plans():
+    """Renderiza a seção completa de Ideias e Planos (formulário + tabela)."""
+    return f'''<div class="space-y-4">
+      {render_planos_ideias()}
+      {render_planos_ideias_table()}
+    </div>'''

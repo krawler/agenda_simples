@@ -2,6 +2,7 @@
 """Handler HTTP da interface web da agenda simples."""
 
 import json
+import os
 import traceback
 import time as time_module
 from datetime import date, datetime, time
@@ -9,6 +10,7 @@ from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
 import renderers
+import ideias
 from inc.handler_logic import (
 	build_nearby_events_payload,
 	import_events,
@@ -16,6 +18,9 @@ from inc.handler_logic import (
 	parse_alerts_minutes,
 	parse_event_form,
 )
+
+
+ENV_FILE = Path(__file__).resolve().parents[1] / ".env"
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -138,6 +143,21 @@ class Handler(BaseHTTPRequestHandler):
 			if u.path.startswith("/img/") or u.path == "/favicon.ico":
 				self._serve_static_file(u.path.lstrip("/"))
 				return
+			if u.path == "/env-config":
+				path = Path(__file__).resolve().parents[1] / ".env"
+				valores = {}
+				if path.exists():
+					for linha in path.read_text(encoding="utf-8").splitlines():
+						linha = linha.strip()
+						if not linha or linha.startswith("#") or "=" not in linha:
+							continue
+						chave, _, valor = linha.partition("=")
+						valores[chave.strip()] = valor.strip().strip('"').strip("'")
+				self._send_json({
+					"notificacao_email": str(valores.get("NOTIFICACAO_EMAIL", "true")).strip().lower() not in {"false", "0", "no", "off", ""},
+					"notificacao_telegram": str(valores.get("NOTIFICACAO_TELEGRAM", "false")).strip().lower() not in {"false", "0", "no", "off", ""},
+				})
+				return
 			match u.path:
 				case "/":
 					self._send(self.render_page(date.today()))
@@ -201,7 +221,18 @@ class Handler(BaseHTTPRequestHandler):
 
 		u = urlparse(self.path)
 		q = parse_qs(u.query)
-		tamanho = int(self.headers.get("Content-Length", 0))
+		headers = getattr(self, "headers", {})
+		tamanho = 0
+		if isinstance(headers, dict):
+			tamanho = int(headers.get("Content-Length") or headers.get("content-length") or 0)
+		else:
+			tamanho = int(headers.get("Content-Length", 0) or 0)
+		if not tamanho and hasattr(self.rfile, "getvalue"):
+			raw = self.rfile.getvalue()
+			if raw:
+				tamanho = len(raw)
+				self.rfile = __import__("io").BytesIO(raw)
+				self.rfile.seek(0)
 		corpo = self.rfile.read(tamanho).decode("utf-8") if tamanho else ""
 		form = {k: v[0] for k, v in parse_qs(corpo).items()}
 		try:
@@ -213,6 +244,8 @@ class Handler(BaseHTTPRequestHandler):
 				self._remover_evento(q)
 			elif u.path == "/skip":
 				self._pular_ocorrencia(q)
+			elif u.path == "/idea":
+				self._salvar_ideia(form)
 			elif u.path == "/sync":
 				self._sincronizar_google()
 			elif u.path == "/import":
@@ -221,6 +254,38 @@ class Handler(BaseHTTPRequestHandler):
 				self._testar_conexao_google()
 			elif u.path == "/google-reauth":
 				self._reautenticar_google()
+			elif u.path == "/save-env":
+				try:
+					dados = json.loads(corpo or "{}") if corpo else {}
+				except json.JSONDecodeError:
+					self._send_json({"ok": False, "msg": "JSON inválido"}, 400)
+					return
+				atualizacoes = {}
+				if "notificacao_email" in dados:
+					atualizacoes["NOTIFICACAO_EMAIL"] = bool(dados.get("notificacao_email"))
+				if "notificacao_telegram" in dados:
+					atualizacoes["NOTIFICACAO_TELEGRAM"] = bool(dados.get("notificacao_telegram"))
+				if not atualizacoes:
+					self._send_json({"ok": False, "msg": "Nenhuma configuração recebida"}, 400)
+					return
+				path = Path(os.environ.get("AGENDA_ENV_FILE") or ENV_FILE)
+				linhas = []
+				if path.exists():
+					linhas = path.read_text(encoding="utf-8").splitlines()
+					valores = {}
+					for linha in linhas:
+						if not linha or linha.startswith("#") or "=" not in linha:
+							continue
+						chave, _, valor = linha.partition("=")
+						valores[chave.strip()] = valor.strip().strip('"').strip("'")
+					for chave, valor in atualizacoes.items():
+						valores[chave] = "true" if valor else "false"
+					linhas = [f"{k}={v}" for k, v in valores.items()]
+				else:
+					for chave, valor in atualizacoes.items():
+						linhas.append(f"{chave}={'true' if valor else 'false'}")
+				path.write_text("\n".join(linhas) + "\n", encoding="utf-8")
+				self._send_json({"ok": True, "saved": list(atualizacoes.keys())})
 			else:
 				self._send("<h1>404</h1>", 404)
 		except Exception as ex:
@@ -328,7 +393,28 @@ class Handler(BaseHTTPRequestHandler):
 			self.agenda.salvar(eventos)
 		self._responder_com_calendario(self._parse_date(q.get("date", [""])[0]))
 		self._notificar_clientes()
+  
+	def _salvar_ideia(self, form):
+		"nome = (form.get("nome") or "").strip()
+		descricao = (form.get("descricao") or "").strip() or None
 
+		if not nome:
+			self._send(
+				'<div class="alert alert-error shadow-sm"><span>Informe um nome para a ideia.</span></div>',
+				400,
+			)
+			return
+
+		try:
+			ideias.criar_ideia(nome, descricao)
+		except ValueError as exc:
+			self._send(
+				f'<div class="alert alert-error shadow-sm"><span>{esc(str(exc))}</span></div>',
+				400,
+			)
+			return
+
+		self._send(render_planos_ideias_table())
 	def _sincronizar_google(self):
 		if not self.agenda.GOOGLE_AVAILABLE:
 			self._send(self.render_sync_status("Bibliotecas do Google Calendar não instaladas."))
