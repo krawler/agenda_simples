@@ -68,60 +68,6 @@ ENV_FILE = Path(__file__).parent / ".env"
 # Lock para acesso thread-safe aos clientes SSE
 sse_lock = threading.Lock()
 
-
-def _env_bool(value, default=False):
-    if value is None:
-        return default
-    if isinstance(value, bool):
-        return value
-    return str(value).strip().lower() not in {"", "false", "0", "no", "off"}
-
-
-def _ler_env_file(path=None):
-    env_path = Path(path or ENV_FILE)
-    valores = {}
-    if not env_path.exists():
-        return env_path, valores
-    for linha in env_path.read_text(encoding="utf-8").splitlines():
-        linha = linha.strip()
-        if not linha or linha.startswith("#") or "=" not in linha:
-            continue
-        chave, _, valor = linha.partition("=")
-        valores[chave.strip()] = valor.strip().strip('"').strip("'")
-    return env_path, valores
-
-
-def _salvar_env_file(atualizacoes, path=None):
-    env_path, valores = _ler_env_file(path)
-    for chave, valor in atualizacoes.items():
-        if isinstance(valor, bool):
-            valores[chave] = "true" if valor else "false"
-        else:
-            valores[chave] = str(valor)
-
-    linhas = []
-    for chave, valor in valores.items():
-        linhas.append(f"{chave}={valor}")
-    env_path.write_text("\n".join(linhas) + ("\n" if linhas else ""), encoding="utf-8")
-    for chave, valor in atualizacoes.items():
-        os.environ[chave] = "true" if valor is True else "false" if valor is False else str(valor)
-    return env_path
-
-
-# --------------------------------------------------------------- consultas dados
-def eventos_do_dia(d):
-    wstart = datetime.combine(d, time.min)
-    wend = datetime.combine(d, time.max)
-    return agenda.expandir(agenda.carregar(), wstart, wend)
-
-
-def dias_com_eventos(ano, mes):
-    ultimo = calmod.monthrange(ano, mes)[1]
-    wstart = datetime.combine(date(ano, mes, 1), time.min)
-    wend = datetime.combine(date(ano, mes, ultimo), time.max)
-    return {occ.date() for occ, _ in agenda.expandir(agenda.carregar(), wstart, wend)}
-
-
 # ------------------------------------------------------------------- renderizacao
 def esc(v):
     return html.escape(str(v)) if v is not None else ""
