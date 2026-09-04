@@ -200,6 +200,17 @@ class RoutesHandlerTests(unittest.TestCase):
         html = renderers.render_period_view(date(2026, 8, 25), view="day")
         self.assertIn('confirmar-movimentacao', html)
 
+    def test_render_period_view_day_exposes_edit_url_for_double_click(self):
+        html = renderers.render_period_view(date(2026, 8, 25), view="day")
+        self.assertIn('data-edit-url="/edit', html)
+
+    def test_render_period_view_day_has_event_action_menu(self):
+        html = renderers.render_period_view(date(2026, 8, 25), view="day")
+        self.assertIn('Editar evento', html)
+        self.assertIn('Excluir evento', html)
+        self.assertIn('Marcar como cancelado', html)
+        self.assertIn('Marcar como concluído', html)
+
     def test_post_move_event_updates_datetime(self):
         handler = self._make_handler(method="POST", path="/move?id=1&date=2026-08-26&time=15:30&panel_date=2026-08-26")
         Handler.agenda.events = [{
