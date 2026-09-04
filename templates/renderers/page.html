@@ -168,20 +168,58 @@
 </body>
 <script>
   (function () {
+    function lerCookie(nome) {
+      const match = document.cookie.match(new RegExp('(?:^|; )' + nome.replace(/([.$?*|{}\(\)\[\]\\\/\+^])/g, '\\$1') + '=([^;]*)'));
+      return match ? decodeURIComponent(match[1]) : null;
+    }
+
+    window.restaurarViewAnterior = function restaurarViewAnterior() {
+      const view = lerCookie('agenda_view') || 'month';
+      const date = lerCookie('agenda_date') || new Date().toISOString().slice(0, 10);
+      const calendar = document.getElementById('calendar');
+      const dayPanel = document.getElementById('day-panel');
+
+      document.body.dataset.editMode = 'false';
+
+      if (calendar) {
+        calendar.style.display = '';
+      }
+      if (dayPanel) {
+        dayPanel.style.display = 'none';
+      }
+
+      if (window.htmx) {
+        htmx.ajax('GET', '/agenda?view=' + encodeURIComponent(view) + '&date=' + encodeURIComponent(date), {
+          target: '#calendar',
+          swap: 'outerHTML'
+        });
+        return;
+      }
+
+      window.location.href = '/agenda?view=' + encodeURIComponent(view) + '&date=' + encodeURIComponent(date);
+    };
+
     function sincronizarLayoutPeriodo() {
       const calendar = document.getElementById('calendar');
       const shell = document.getElementById('calendar-shell');
       const dayPanel = document.getElementById('day-panel');
+      const editMode = document.body.dataset.editMode === 'true';
 
       if (!shell) {
         return;
       }
 
       const isPeriodView = !!calendar && !!calendar.dataset.view && ['day', 'week', 'month'].includes(calendar.dataset.view);
-      shell.classList.toggle('calendar-shell-expanded', isPeriodView);
+      shell.classList.toggle('calendar-shell-expanded', isPeriodView && !editMode);
 
       if (dayPanel) {
-        dayPanel.style.display = isPeriodView ? 'none' : '';
+        dayPanel.style.display = (isPeriodView && !editMode) ? 'none' : '';
+      }
+
+      if (calendar && editMode) {
+        calendar.style.display = 'none';
+      } else if (calendar) {
+        calendar.style.display = '';
       }
     }
 
@@ -193,6 +231,29 @@
 
       eventos.forEach(function (evento) {
         evento.setAttribute('draggable', 'true');
+
+        evento.addEventListener('dblclick', function (event) {
+          event.preventDefault();
+          const editUrl = evento.dataset.editUrl || '/edit?id=' + encodeURIComponent(evento.dataset.eventId || '0') + '&date=' + encodeURIComponent(evento.dataset.eventDate || '');
+          const dayPanel = document.getElementById('day-panel');
+          const calendar = document.getElementById('calendar');
+
+          document.body.dataset.editMode = 'true';
+          if (calendar) {
+            calendar.style.display = 'none';
+          }
+          if (dayPanel) {
+            dayPanel.style.display = '';
+          }
+
+          if (window.htmx) {
+            htmx.ajax('GET', editUrl, { target: '#day-panel', swap: 'innerHTML' });
+            return;
+          }
+
+          window.location.href = editUrl;
+        });
+
         evento.addEventListener('dragstart', function (event) {
           dragOrigin = {
             id: evento.dataset.eventId,
@@ -289,7 +350,13 @@
       iniciarDragAndDropAgenda();
     }
 
-    document.addEventListener('htmx:afterSwap', function () {
+    document.addEventListener('htmx:afterSwap', function (event) {
+      const shouldRestore = document.body.dataset.pendingRestore === 'true';
+      if (shouldRestore) {
+        document.body.dataset.pendingRestore = 'false';
+        restaurarViewAnterior();
+        return;
+      }
       sincronizarLayoutPeriodo();
       iniciarDragAndDropAgenda();
     });
