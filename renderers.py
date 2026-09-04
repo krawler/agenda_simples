@@ -206,14 +206,30 @@ def render_period_view(selected_date=None, view="day"):
             cards = []
             for occ, e in eventos:
                 fim = occ + timedelta(minutes=e.get("dur", 0)) if e.get("dur") else occ
+                edit_url = f"/edit?id={e.get('id', 0)}&date={occ.date().isoformat()}"
+                titulo = esc(e.get('titulo', 'Evento'))
+                menu = (
+                    "<div class='dropdown dropdown-end ml-auto'>"
+                    "<div tabindex='0' role='button' class='btn btn-ghost btn-xs btn-circle border-0 hover:bg-base-300/70 p-0 h-6 w-6 min-h-0' aria-label='Ações do evento'>"
+                    "<svg viewBox='0 0 20 20' fill='currentColor' class='w-4 h-4'><path d='M4 7.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm6 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm6 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3zM4 13.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm6 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm6 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3z' /></svg>"
+                    "</div>"
+                    "<ul tabindex='0' class='dropdown-content z-20 menu p-2 shadow bg-base-100 rounded-box w-52 border border-base-200'>"
+                    f"<li><button type='button' class='text-left' hx-get=\"/edit?id={e.get('id', 0)}&date={occ.date().isoformat()}\" hx-target=\"#day-panel\">Editar evento</button></li>"
+                    f"<li><button type='button' class='text-left text-error' hx-post=\"/delete?id={e.get('id', 0)}&date={occ.date().isoformat()}\" hx-target=\"#day-panel\" hx-confirm=\"Remover '{titulo}'?\">Excluir evento</button></li>"
+                    f"<li><form hx-post=\"/update\" hx-target=\"#day-panel\" class='contents'><input type='hidden' name='id' value='{e.get('id', 0)}'><input type='hidden' name='date' value='{occ.date().isoformat()}'><input type='hidden' name='time' value='{occ.strftime('%H:%M')}'><input type='hidden' name='dur' value='{e.get('dur') or ''}'><input type='hidden' name='titulo' value='{titulo}'><input type='hidden' name='panel_date' value='{occ.date().isoformat()}'><input type='hidden' name='status' value='cancelado'><button type='submit' class='text-left w-full'>Marcar como cancelado</button></form></li>"
+                    f"<li><form hx-post=\"/update\" hx-target=\"#day-panel\" class='contents'><input type='hidden' name='id' value='{e.get('id', 0)}'><input type='hidden' name='date' value='{occ.date().isoformat()}'><input type='hidden' name='time' value='{occ.strftime('%H:%M')}'><input type='hidden' name='dur' value='{e.get('dur') or ''}'><input type='hidden' name='titulo' value='{titulo}'><input type='hidden' name='panel_date' value='{occ.date().isoformat()}'><input type='hidden' name='status' value='concluido'><button type='submit' class='text-left w-full'>Marcar como concluído</button></form></li>"
+                    "</ul>"
+                    "</div>"
+                )
                 cards.append(
-                    "<div class=\"rounded-lg bg-base-200 p-2 text-xs cursor-move agenda-event\" draggable=\"true\" "
+                    "<div class=\"rounded-lg bg-base-200 p-2 text-xs cursor-move agenda-event flex items-start gap-2\" draggable=\"true\" "
                     f"data-event-id=\"{e.get('id', 0)}\" "
                     f"data-event-date=\"{occ.date().isoformat()}\" "
                     f"data-event-time=\"{occ.strftime('%H:%M')}\" "
-                    f"data-drop-date=\"{dia.isoformat()}\">"
-                    f"<div class='font-medium'>{esc(e.get('titulo', 'Evento'))}</div>"
-                    f"<div class='opacity-70'>{occ:%H:%M} - {fim:%H:%M}</div>"
+                    f"data-drop-date=\"{dia.isoformat()}\" "
+                    f"data-edit-url=\"{edit_url}\">"
+                    f"<div class='flex-1 min-w-0'><div class='font-medium truncate'>{titulo}</div><div class='opacity-70'>{occ:%H:%M} - {fim:%H:%M}</div></div>"
+                    f"{menu}"
                     "</div>"
                 )
             rows.append(
@@ -222,10 +238,7 @@ def render_period_view(selected_date=None, view="day"):
                 f"<div class='space-y-2'>{''.join(cards)}</div>"
                 f"</div>"
             )
-        header = "".join(
-            f"<div class='text-center text-[11px] uppercase tracking-wide opacity-70'>{d:%a}</div>"
-            for d in days
-        )
+    
         body = "".join(rows)
         return (
             f'<div id="calendar" class="card bg-base-100 shadow-md" data-view="{view_name}" data-date="{selected_date.isoformat()}">'
@@ -235,7 +248,7 @@ def render_period_view(selected_date=None, view="day"):
             f'<h2 class="text-lg font-bold">Semana de {days[0]:%d/%m} · {days[-1]:%d/%m}</h2>'
             f'<button class="btn btn-sm btn-ghost" hx-get="/agenda?view=week&date={selected_date + timedelta(days=7)}" hx-target="#calendar" hx-swap="outerHTML">›</button>'
             f'</div>'
-            f'<div class="grid grid-cols-7 gap-2">{header}</div>'
+    
             f'<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2 mt-2">{body}</div>'
             f'</div>'
             f'</div>'
@@ -269,17 +282,32 @@ def render_period_view(selected_date=None, view="day"):
                 if e.get("desc"):
                     desc = f"<div class='mt-1 text-[10px] leading-relaxed opacity-60'>{esc(e.get('desc', ''))[:90]}{('…' if len(str(e.get('desc', ''))) > 90 else '')}</div>"
 
+                edit_url = f"/edit?id={e.get('id', 0)}&date={occ.date().isoformat()}"
+                titulo = esc(e.get('titulo', 'Evento'))
+                menu = (
+                    "<div class='dropdown dropdown-end ml-auto'>"
+                    "<div tabindex='0' role='button' class='btn btn-ghost btn-xs btn-circle border-0 hover:bg-base-300/70 p-0 h-6 w-6 min-h-0' aria-label='Ações do evento'>"
+                    "<svg viewBox='0 0 20 20' fill='currentColor' class='w-4 h-4'><path d='M4 7.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm6 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm6 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3zM4 13.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm6 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm6 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3z' /></svg>"
+                    "</div>"
+                    "<ul tabindex='0' class='dropdown-content z-20 menu p-2 shadow bg-base-100 rounded-box w-52 border border-base-200'>"
+                    f"<li><button type='button' class='text-left' hx-get=\"/edit?id={e.get('id', 0)}&date={occ.date().isoformat()}\" hx-target=\"#day-panel\">Editar evento</button></li>"
+                    f"<li><button type='button' class='text-left text-error' hx-post=\"/delete?id={e.get('id', 0)}&date={occ.date().isoformat()}\" hx-target=\"#day-panel\" hx-confirm=\"Remover '{titulo}'?\">Excluir evento</button></li>"
+                    f"<li><form hx-post=\"/update\" hx-target=\"#day-panel\" class='contents'><input type='hidden' name='id' value='{e.get('id', 0)}'><input type='hidden' name='date' value='{occ.date().isoformat()}'><input type='hidden' name='time' value='{occ.strftime('%H:%M')}'><input type='hidden' name='dur' value='{e.get('dur') or ''}'><input type='hidden' name='titulo' value='{titulo}'><input type='hidden' name='panel_date' value='{occ.date().isoformat()}'><input type='hidden' name='status' value='cancelado'><button type='submit' class='text-left w-full'>Marcar como cancelado</button></form></li>"
+                    f"<li><form hx-post=\"/update\" hx-target=\"#day-panel\" class='contents'><input type='hidden' name='id' value='{e.get('id', 0)}'><input type='hidden' name='date' value='{occ.date().isoformat()}'><input type='hidden' name='time' value='{occ.strftime('%H:%M')}'><input type='hidden' name='dur' value='{e.get('dur') or ''}'><input type='hidden' name='titulo' value='{titulo}'><input type='hidden' name='panel_date' value='{occ.date().isoformat()}'><input type='hidden' name='status' value='concluido'><button type='submit' class='text-left w-full'>Marcar como concluído</button></form></li>"
+                    "</ul>"
+                    "</div>"
+                )
                 cards.append(
-                    "<div class=\"agenda-event rounded-xl border border-primary/30 bg-base-200 p-2 shadow-sm cursor-move\" draggable=\"true\" "
+                    "<div class=\"agenda-event rounded-xl border border-primary/30 bg-base-200 p-2 shadow-sm cursor-move flex items-start gap-2\" draggable=\"true\" "
                     f"data-event-id=\"{e.get('id', 0)}\" "
                     f"data-event-date=\"{occ.date().isoformat()}\" "
                     f"data-event-time=\"{occ.strftime('%H:%M')}\" "
                     f"data-drop-date=\"{selected_date.isoformat()}\" "
                     f"data-drop-hour=\"{hour}\" "
-                    f"data-confirmar-movimentacao=\"true\">"
-                    f"<div class='text-[10px] uppercase tracking-wide font-semibold opacity-70'>{occ:%H:%M} - {fim:%H:%M}</div>"
-                    f"<div class='font-semibold mt-1 text-xs'>{esc(e.get('titulo', 'Evento'))}</div>"
-                    f"{desc}"
+                    f"data-confirmar-movimentacao=\"true\" "
+                    f"data-edit-url=\"{edit_url}\">"
+                    f"<div class='flex-1 min-w-0'><div class='text-[10px] uppercase tracking-wide font-semibold opacity-70'>{occ:%H:%M} - {fim:%H:%M}</div><div class='font-semibold mt-1 text-xs'>{titulo}</div>{desc}</div>"
+                    f"{menu}"
                     "</div>"
                 )
 
