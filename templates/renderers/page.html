@@ -19,6 +19,85 @@
       max-width: 240px;
       word-break: break-word;
     }
+
+    .calendar-view {
+      transition: all 0.2s ease;
+    }
+
+    .calendar-shell {
+      min-width: 0;
+    }
+
+    .calendar-shell-expanded {
+      grid-column: 1 / -1;
+    }
+
+    .agenda-day-timeline {
+      background: linear-gradient(180deg, rgba(255,255,255,0.72), rgba(248,250,252,0.96));
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+      overflow: hidden;
+    }
+
+    .agenda-hour-row {
+      background: linear-gradient(90deg, rgba(255,255,255,0.52), rgba(248,250,252,0.9));
+      min-height: 24px;
+    }
+
+    .agenda-hour-row + .agenda-hour-row {
+      border-top: 1px solid rgba(148, 163, 184, 0.25);
+    }
+
+    .agenda-hour-events {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: stretch;
+      min-height: 0;
+    }
+
+    .agenda-hour-events > .agenda-event {
+      flex: 1 1 180px;
+      min-width: 150px;
+      max-width: calc(50% - 0.25rem);
+    }
+
+    .agenda-hour-row.agenda-drop-zone.drag-over {
+      background: linear-gradient(90deg, rgba(191,219,254,0.8), rgba(219,234,254,0.95));
+      box-shadow: inset 0 0 0 2px rgba(59, 130, 246, 0.7), 0 0 0 3px rgba(96,165,250,0.18);
+      position: relative;
+    }
+
+    .agenda-hour-row.agenda-drop-zone.drag-over::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: rgba(59, 130, 246, 0.08);
+      pointer-events: none;
+    }
+
+    .agenda-hour-label {
+      color: rgba(71, 85, 105, 0.8);
+      background: rgba(148, 163, 184, 0.05);
+      border-right: 1px solid rgba(148, 163, 184, 0.18);
+    }
+
+    .agenda-event {
+      border-left: 4px solid rgba(59, 130, 246, 0.72);
+      background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(239,246,255,0.72));
+      border-radius: 0.85rem;
+      box-shadow: 0 4px 14px rgba(59, 130, 246, 0.08);
+      transition: transform 0.12s ease, box-shadow 0.12s ease;
+    }
+
+    .agenda-event:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 20px rgba(59, 130, 246, 0.12);
+    }
+
+    .day-panel {
+      min-width: 0;
+    }
   </style>
   <script src="https://unpkg.com/htmx.org@1.9.12"></script>
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -47,11 +126,13 @@
         {{ sync_html|safe }}
     </div>
     <div class="grid md:grid-cols-2 gap-4">
-      <div class="space-y-4">
+      <div class="space-y-4 calendar-shell" id="calendar-shell">
         {{ calendar_html|safe }}
         {{ controls_html|safe }}
       </div>
-      {{ day_panel_html|safe }}
+      <div id="day-panel" class="day-panel">
+        {{ day_panel_html|safe }}
+      </div>
     </div>
   </div>
 
@@ -85,5 +166,134 @@
   {{ duracao_modal_js|safe }}
   {{ sync_modal_js|safe }}
 </body>
+<script>
+  (function () {
+    function sincronizarLayoutPeriodo() {
+      const calendar = document.getElementById('calendar');
+      const shell = document.getElementById('calendar-shell');
+      const dayPanel = document.getElementById('day-panel');
+
+      if (!shell) {
+        return;
+      }
+
+      const isPeriodView = !!calendar && !!calendar.dataset.view && ['day', 'week', 'month'].includes(calendar.dataset.view);
+      shell.classList.toggle('calendar-shell-expanded', isPeriodView);
+
+      if (dayPanel) {
+        dayPanel.style.display = isPeriodView ? 'none' : '';
+      }
+    }
+
+    function iniciarDragAndDropAgenda() {
+      const areas = document.querySelectorAll('.agenda-drop-zone');
+      const eventos = document.querySelectorAll('.agenda-event');
+
+      let dragOrigin = null;
+
+      eventos.forEach(function (evento) {
+        evento.setAttribute('draggable', 'true');
+        evento.addEventListener('dragstart', function (event) {
+          dragOrigin = {
+            id: evento.dataset.eventId,
+            date: evento.dataset.eventDate || evento.dataset.dropDate,
+            time: evento.dataset.eventTime || '09:00'
+          };
+          event.dataTransfer.setData('text/plain', JSON.stringify(dragOrigin));
+          event.dataTransfer.effectAllowed = 'move';
+
+          document.querySelectorAll('.agenda-drop-zone').forEach(function (zone) {
+            zone.classList.add('drag-over');
+          });
+        });
+
+        evento.addEventListener('dragend', function () {
+          document.querySelectorAll('.agenda-drop-zone').forEach(function (zone) {
+            zone.classList.remove('drag-over');
+          });
+          dragOrigin = null;
+        });
+      });
+
+      areas.forEach(function (area) {
+        area.addEventListener('dragover', function (event) {
+          event.preventDefault();
+          document.querySelectorAll('.agenda-drop-zone').forEach(function (zone) {
+            zone.classList.remove('drag-over');
+          });
+          area.classList.add('drag-over');
+        });
+
+        area.addEventListener('dragleave', function () {
+          area.classList.remove('drag-over');
+        });
+
+        area.addEventListener('drop', function (event) {
+          event.preventDefault();
+          area.classList.remove('drag-over');
+          try {
+            const payload = JSON.parse(event.dataTransfer.getData('text/plain'));
+            if (!payload || !payload.id) {
+              return;
+            }
+            const targetDate = area.dataset.dropDate || payload.date;
+            const targetHour = area.dataset.dropHour;
+            const targetTime = targetHour !== undefined ? `${String(targetHour).padStart(2, '0')}:00` : (payload.time || '09:00');
+            const targetHasEvents = !!area.querySelector('.agenda-event');
+            if (targetHasEvents) {
+              const confirmar = window.confirm('Deseja mesmo colocar esse evento nesse horário?');
+              if (!confirmar) {
+                return;
+              }
+            }
+
+            const body = new URLSearchParams({
+              id: String(payload.id),
+              date: targetDate,
+              time: targetTime,
+              panel_date: targetDate
+            });
+            fetch('/move', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+              body: body.toString()
+            }).then(function (response) {
+              if (!response.ok) {
+                throw new Error('Falha ao mover evento');
+              }
+              return response.text();
+            }).then(function (html) {
+              const container = document.getElementById('calendar');
+              if (container && html) {
+                container.outerHTML = html;
+                sincronizarLayoutPeriodo();
+                iniciarDragAndDropAgenda();
+              }
+            }).catch(function () {
+              window.location.reload();
+            });
+          } catch (e) {
+            window.location.reload();
+          }
+        });
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function () {
+        sincronizarLayoutPeriodo();
+        iniciarDragAndDropAgenda();
+      });
+    } else {
+      sincronizarLayoutPeriodo();
+      iniciarDragAndDropAgenda();
+    }
+
+    document.addEventListener('htmx:afterSwap', function () {
+      sincronizarLayoutPeriodo();
+      iniciarDragAndDropAgenda();
+    });
+  })();
+</script>
 <script src="/js/jquery-script.js"></script>
 </html>

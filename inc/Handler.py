@@ -5,6 +5,7 @@ import json
 import traceback
 import time as time_module
 from datetime import date, datetime, time
+from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
@@ -26,6 +27,7 @@ class Handler(BaseHTTPRequestHandler):
 
 	agenda = None
 	render_calendar = staticmethod(renderers.render_calendar)
+	render_period_view = staticmethod(renderers.render_period_view)
 	render_controls = staticmethod(renderers.render_controls)
 	render_day_panel = staticmethod(renderers.render_day_panel)
 	render_alerts_banner = staticmethod(renderers.render_alerts_banner)
@@ -43,6 +45,7 @@ class Handler(BaseHTTPRequestHandler):
 	def configure(cls, **kwargs):
 		render_keys = {
 			"render_calendar",
+			"render_period_view",
 			"render_controls",
 			"render_day_panel",
 			"render_alerts_banner",
@@ -63,9 +66,27 @@ class Handler(BaseHTTPRequestHandler):
 		except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, OSError):
 			pass
 
-	def _send(self, corpo, status=200):
+	def _read_cookies(self):
+		cookie_header = self.headers.get("Cookie", "")
+		jar = SimpleCookie()
+		try:
+			jar.load(cookie_header)
+		except Exception:
+			return {}
+		return {k: v.value for k, v in jar.items()}
+
+	def _set_cookie(self, name, value, *, path="/", max_age=31536000):
+		self.send_header(
+			"Set-Cookie",
+			f"{name}={value}; Path={path}; Max-Age={max_age}; SameSite=Lax"
+		)
+
+	def _send(self, corpo, status=200, cookies=None):
 		dados = corpo.encode("utf-8")
 		self.send_response(status)
+		if cookies:
+			for name, value in cookies.items():
+				self._set_cookie(name, value)
 		self.send_header("Content-Type", "text/html; charset=utf-8")
 		self.send_header("Content-Length", str(len(dados)))
 		self.end_headers()
@@ -130,6 +151,7 @@ class Handler(BaseHTTPRequestHandler):
 
 		u = urlparse(self.path)
 		q = parse_qs(u.query)
+		cookies = self._read_cookies()
 
 		try:
 			if u.path.startswith("/js/"):
@@ -140,7 +162,11 @@ class Handler(BaseHTTPRequestHandler):
 				return
 			match u.path:
 				case "/":
-					self._send(self.render_page(date.today()))
+					view = (q.get("view", [cookies.get("agenda_view", "month")])[0] or cookies.get("agenda_view", "month") or "month").lower()
+					raw_date = q.get("date", [cookies.get("agenda_date", date.today().isoformat())])[0]
+					selected = (raw_date or cookies.get("agenda_date") or date.today().isoformat()).strip()
+					selected_date = self._parse_date(selected)
+					self._send(self.render_page(selected_date, view=view), cookies={"agenda_view": view, "agenda_date": selected_date.isoformat()})
 				case "/__dev_status":
 					self._send_json({
 						"ok": True,
@@ -156,22 +182,28 @@ class Handler(BaseHTTPRequestHandler):
 						threading.Thread(target=self.server_instance["value"].shutdown, daemon=True).start()
 				case "/day":
 					d = self._parse_date(q.get("date", [""])[0])
-					self._send(self.render_day_panel(d))
+					self._send(self.render_day_panel(d), cookies={"agenda_date": d.isoformat(), "agenda_view": (q.get("view", [cookies.get("agenda_view", "day")])[0] or cookies.get("agenda_view", "day") or "day").lower()})
 				case "/edit":
 					d = self._parse_date(q.get("date", [""])[0])
 					eid = int(q.get("id", ["0"])[0])
-					self._send(self.render_day_panel(d, editando=eid))
+					self._send(self.render_day_panel(d, editando=eid), cookies={"agenda_date": d.isoformat(), "agenda_view": (q.get("view", [cookies.get("agenda_view", "day")])[0] or cookies.get("agenda_view", "day") or "day").lower()})
 				case "/calendar":
 					try:
 						ano = int(q.get("year", [date.today().year])[0])
 						mes = int(q.get("month", [date.today().month])[0])
 						sel = self._parse_date(q.get("sel", [""])[0])
-						self._send(self.render_calendar(ano, mes, sel))
+						self._send(self.render_calendar(ano, mes, sel), cookies={"agenda_date": sel.isoformat(), "agenda_view": (q.get("view", [cookies.get("agenda_view", "month")])[0] or cookies.get("agenda_view", "month") or "month").lower()})
 					except ValueError:
 						ano = date.today().year
 						mes = max(1, min(12, date.today().month))
 						sel = self._parse_date(q.get("sel", [""])[0])
-						self._send(self.render_calendar(ano, mes, sel))
+						self._send(self.render_calendar(ano, mes, sel), cookies={"agenda_date": sel.isoformat(), "agenda_view": (q.get("view", [cookies.get("agenda_view", "month")])[0] or cookies.get("agenda_view", "month") or "month").lower()})
+				case "/agenda":
+					view = (q.get("view", [cookies.get("agenda_view", "day")])[0] or cookies.get("agenda_view", "day") or "day").lower()
+					raw_date = q.get("date", [cookies.get("agenda_date", date.today().isoformat())])[0]
+					selected = (raw_date or cookies.get("agenda_date") or date.today().isoformat()).strip()
+					selected_date = self._parse_date(selected)
+					self._send(self.render_period_view(selected_date, view=view), cookies={"agenda_view": view, "agenda_date": selected_date.isoformat()})
 				case "/alerts":
 					d = date.today()
 					alerts_banner = self.render_alerts_banner()
@@ -204,11 +236,16 @@ class Handler(BaseHTTPRequestHandler):
 		tamanho = int(self.headers.get("Content-Length", 0))
 		corpo = self.rfile.read(tamanho).decode("utf-8") if tamanho else ""
 		form = {k: v[0] for k, v in parse_qs(corpo).items()}
+		for key, values in q.items():
+			if key not in form and values:
+				form[key] = values[0]
 		try:
 			if u.path == "/event":
 				self._criar_evento(form)
 			elif u.path == "/update":
 				self._atualizar_evento(form)
+			elif u.path == "/move":
+				self._mover_evento(form)
 			elif u.path == "/delete":
 				self._remover_evento(q)
 			elif u.path == "/skip":
@@ -327,6 +364,32 @@ class Handler(BaseHTTPRequestHandler):
 			e["except"] = sorted(excecoes)
 			self.agenda.salvar(eventos)
 		self._responder_com_calendario(self._parse_date(q.get("date", [""])[0]))
+		self._notificar_clientes()
+
+	def _mover_evento(self, form):
+		eid = int(form.get("id", "0"))
+		eventos = self.agenda.carregar()
+		evento = next((x for x in eventos if x["id"] == eid), None)
+		if evento is None:
+			self._send("<h1>404</h1>", 404)
+			return
+
+		target_date = self._parse_date(form.get("date") or form.get("panel_date") or date.today().isoformat())
+		target_time = (form.get("time") or "09:00").strip() or "09:00"
+		view = (form.get("view") or self._read_cookies().get("agenda_view") or "day").lower()
+		try:
+			novo_inicio = datetime.strptime(f"{target_date.isoformat()} {target_time}", self.agenda.FMT)
+		except ValueError:
+			novo_inicio = datetime.combine(target_date, time(9, 0))
+
+		evento["inicio"] = novo_inicio.strftime(self.agenda.FMT)
+		if evento.get("dur") is None:
+			evento["dur"] = 60
+		self.agenda.salvar(eventos)
+		painel = self._parse_date(form.get("panel_date") or form.get("date") or target_date.isoformat())
+		cal_html = self.render_calendar(painel.year, painel.month, painel)
+		cal_oob = cal_html.replace('id="calendar"', 'id="calendar" hx-swap-oob="true"', 1)
+		self._send(self.render_day_panel(painel) + cal_oob, cookies={"agenda_view": view, "agenda_date": painel.isoformat()})
 		self._notificar_clientes()
 
 	def _sincronizar_google(self):

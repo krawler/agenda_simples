@@ -528,7 +528,6 @@ $(document).ready(function() {
   }
 
   function updateAlertCountdowns() {
-    console.log('[agenda] updateAlertCountdowns: called');
     var now = Date.now();
 
     $('.js-alert-countdown').each(function() {

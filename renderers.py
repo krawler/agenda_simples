@@ -154,9 +154,167 @@ def contagem_eventos_por_dia(ano, mes):
     return contagem
 
 
-def render_controls(ano_atual=None):
-    """Renderiza os controles (botões, seletor de ano) para ficar abaixo do calendário."""
-    return _render_template("controls.html", ano_atual=ano_atual)
+def render_controls(selected_date=None):
+    """Renderiza os controles (botões e alternância de visão) para o calendário atual."""
+    if selected_date is None:
+        selected_date = date.today()
+    if isinstance(selected_date, str):
+        try:
+            selected_date = date.fromisoformat(selected_date)
+        except ValueError:
+            selected_date = date.today()
+    return _render_template(
+        "controls.html",
+        ano_atual=selected_date.year,
+        hoje=selected_date.isoformat(),
+        selected_date=selected_date,
+    )
+
+
+def render_period_view(selected_date=None, view="day"):
+    """Renderiza uma visão de agenda por dia, semana ou mês."""
+    if selected_date is None:
+        selected_date = date.today()
+    if isinstance(selected_date, str):
+        try:
+            selected_date = date.fromisoformat(selected_date)
+        except ValueError:
+            selected_date = date.today()
+
+    view_name = (view or "day").lower()
+    if view_name == "month":
+        return render_calendar(selected_date.year, selected_date.month, selected_date)
+
+    if view_name == "week":
+        start_of_week = selected_date - timedelta(days=selected_date.weekday())
+        days = [start_of_week + timedelta(days=i) for i in range(7)]
+        rows = []
+        for dia in days:
+            eventos = agenda.expandir(
+                agenda.carregar(),
+                datetime.combine(dia, time.min),
+                datetime.combine(dia, time.max),
+            )
+            if not eventos:
+                rows.append(
+                    f"<div class='rounded-xl border border-base-300 p-2 min-h-[90px] opacity-40 agenda-drop-zone' data-drop-date='{dia.isoformat()}'>"
+                    f"<div class='text-xs font-semibold mb-2'>{dia:%a}</div>"
+                    f"<div class='text-xs'>Sem eventos</div>"
+                    f"</div>"
+                )
+                continue
+            cards = []
+            for occ, e in eventos:
+                fim = occ + timedelta(minutes=e.get("dur", 0)) if e.get("dur") else occ
+                cards.append(
+                    "<div class=\"rounded-lg bg-base-200 p-2 text-xs cursor-move agenda-event\" draggable=\"true\" "
+                    f"data-event-id=\"{e.get('id', 0)}\" "
+                    f"data-event-date=\"{occ.date().isoformat()}\" "
+                    f"data-event-time=\"{occ.strftime('%H:%M')}\" "
+                    f"data-drop-date=\"{dia.isoformat()}\">"
+                    f"<div class='font-medium'>{esc(e.get('titulo', 'Evento'))}</div>"
+                    f"<div class='opacity-70'>{occ:%H:%M} - {fim:%H:%M}</div>"
+                    "</div>"
+                )
+            rows.append(
+                f"<div class='rounded-xl border border-base-300 p-2 min-h-[90px] agenda-drop-zone' data-drop-date='{dia.isoformat()}'>"
+                f"<div class='text-xs font-semibold mb-2'>{dia:%a} · {dia.day}</div>"
+                f"<div class='space-y-2'>{''.join(cards)}</div>"
+                f"</div>"
+            )
+        header = "".join(
+            f"<div class='text-center text-[11px] uppercase tracking-wide opacity-70'>{d:%a}</div>"
+            for d in days
+        )
+        body = "".join(rows)
+        return (
+            f'<div id="calendar" class="card bg-base-100 shadow-md" data-view="{view_name}" data-date="{selected_date.isoformat()}">'
+            f'<div class="card-body p-4">'
+            f'<div class="flex items-center justify-between mb-3">'
+            f'<button class="btn btn-sm btn-ghost" hx-get="/agenda?view=week&date={selected_date - timedelta(days=7)}" hx-target="#calendar" hx-swap="outerHTML">‹</button>'
+            f'<h2 class="text-lg font-bold">Semana de {days[0]:%d/%m} · {days[-1]:%d/%m}</h2>'
+            f'<button class="btn btn-sm btn-ghost" hx-get="/agenda?view=week&date={selected_date + timedelta(days=7)}" hx-target="#calendar" hx-swap="outerHTML">›</button>'
+            f'</div>'
+            f'<div class="grid grid-cols-7 gap-2">{header}</div>'
+            f'<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2 mt-2">{body}</div>'
+            f'</div>'
+            f'</div>'
+        )
+
+    start = datetime.combine(selected_date, time.min)
+    end = datetime.combine(selected_date, time.max)
+    itens = agenda.expandir(agenda.carregar(), start, end)
+
+    if not itens:
+        lines = "<div class='text-center opacity-50 py-10'>Nenhum evento neste dia.</div>"
+        timeline_rows = "".join(
+            f"<div class=\"agenda-hour-row grid grid-cols-[72px_minmax(0,1fr)] border-t border-base-300 min-h-[42px] agenda-drop-zone\" "
+            f"data-drop-date=\"{selected_date.isoformat()}\" data-drop-hour=\"{hour}\" data-drop-time=\"{hour:02d}:00\">"
+            f"<div class='agenda-hour-label px-2 py-2 text-right text-xs font-medium opacity-70'>{hour:02d}:00</div>"
+            f"<div class='px-2 py-2'></div>"
+            f"</div>"
+            for hour in range(24)
+        )
+    else:
+        linhas = []
+        por_hora = {hour: [] for hour in range(24)}
+        for occ, e in itens:
+            por_hora.setdefault(occ.hour, []).append((occ, e))
+
+        for hour in range(24):
+            cards = []
+            for occ, e in por_hora.get(hour, []):
+                fim = occ + timedelta(minutes=e.get("dur", 0)) if e.get("dur") else occ
+                desc = ""
+                if e.get("desc"):
+                    desc = f"<div class='mt-1 text-[10px] leading-relaxed opacity-60'>{esc(e.get('desc', ''))[:90]}{('…' if len(str(e.get('desc', ''))) > 90 else '')}</div>"
+
+                cards.append(
+                    "<div class=\"agenda-event rounded-xl border border-primary/30 bg-base-200 p-2 shadow-sm cursor-move\" draggable=\"true\" "
+                    f"data-event-id=\"{e.get('id', 0)}\" "
+                    f"data-event-date=\"{occ.date().isoformat()}\" "
+                    f"data-event-time=\"{occ.strftime('%H:%M')}\" "
+                    f"data-drop-date=\"{selected_date.isoformat()}\" "
+                    f"data-drop-hour=\"{hour}\" "
+                    f"data-confirmar-movimentacao=\"true\">"
+                    f"<div class='text-[10px] uppercase tracking-wide font-semibold opacity-70'>{occ:%H:%M} - {fim:%H:%M}</div>"
+                    f"<div class='font-semibold mt-1 text-xs'>{esc(e.get('titulo', 'Evento'))}</div>"
+                    f"{desc}"
+                    "</div>"
+                )
+
+            if cards:
+                content = (
+                    "<div class='agenda-hour-events flex flex-wrap gap-2 items-stretch w-full overflow-hidden' style='display: flex; flex-wrap: wrap; gap: 0.5rem;'>"
+                    + "".join(cards) +
+                    "</div>"
+                )
+            else:
+                content = "<div class='text-xs text-base-content/40 px-2 py-2'>—</div>"
+
+            linhas.append(
+                f"<div class=\"agenda-hour-row grid grid-cols-[72px_minmax(0,1fr)] border-t border-base-300 min-h-[28px] agenda-drop-zone\" "
+                f"data-drop-date=\"{selected_date.isoformat()}\" data-drop-hour=\"{hour}\" data-drop-time=\"{hour:02d}:00\" "
+                f"data-confirmar-movimentacao=\"true\">"
+                f"<div class='agenda-hour-label px-2 py-2 text-right text-xs font-medium opacity-70'>{hour:02d}:00</div>"
+                f"<div class='px-2 py-2'>{content}</div>"
+                f"</div>"
+            )
+        timeline_rows = "".join(linhas)
+        lines = timeline_rows
+
+    return (
+        f'<div id="calendar" class="card bg-base-100 shadow-md calendar-view" data-view="{view_name}" data-date="{selected_date.isoformat()}">'
+        f'<div class="card-body p-4">'
+        f'<div class="flex items-center justify-between mb-3">'
+        f'<button class="btn btn-sm btn-ghost" hx-get="/agenda?view=day&date={selected_date - timedelta(days=1)}" hx-target="#calendar" hx-swap="outerHTML">‹</button>'
+        f'<h2 class="text-lg font-bold">{selected_date:%d/%m/%Y}</h2>'
+        f'<button class="btn btn-sm btn-ghost" hx-get="/agenda?view=day&date={selected_date + timedelta(days=1)}" hx-target="#calendar" hx-swap="outerHTML">›</button>'
+        f'</div>'
+        f'<div class="agenda-day-timeline overflow-hidden rounded-xl border border-base-300 bg-base-50">{lines}</div>'
+        f'</div>'
+        f'</div>'
+    )
 
 
 def render_evento_item(occ, e):
@@ -670,9 +828,13 @@ DURACAO_MODAL_JS = """
 """
 
 
-def render_page(sel):
-  calendar_html = render_calendar(sel.year, sel.month, sel)
-  controls_html = render_controls(sel.year)
+def render_page(sel, view="month"):
+  view_name = (view or "month").lower()
+  if view_name in ("day", "week"):
+    calendar_html = render_period_view(sel, view=view_name)
+  else:
+    calendar_html = render_calendar(sel.year, sel.month, sel)
+  controls_html = render_controls(sel)
   day_panel_html = render_day_panel(sel)
   alerts_html = render_alerts_banner()
   sync_html = render_sync_status()
