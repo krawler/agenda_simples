@@ -13,6 +13,11 @@
           ⚙️ Configurações
         </button>
       </div>
+      <div class="flex flex-wrap gap-2 w-full pt-1 border-t border-base-200">
+        <button class="btn btn-sm btn-outline flex-1 min-w-[90px]" hx-get="/agenda?view=day&date={{ selected_date.isoformat() if selected_date else hoje }}" hx-target="#calendar" hx-swap="outerHTML">Dia</button>
+        <button class="btn btn-sm btn-outline flex-1 min-w-[90px]" hx-get="/agenda?view=week&date={{ selected_date.isoformat() if selected_date else hoje }}" hx-target="#calendar" hx-swap="outerHTML">Semana</button>
+        <button class="btn btn-sm btn-outline flex-1 min-w-[90px]" hx-get="/agenda?view=month&date={{ selected_date.isoformat() if selected_date else hoje }}" hx-target="#calendar" hx-swap="outerHTML">Mês</button>
+      </div>
     </div>
   </div>
 </div>
