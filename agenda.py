@@ -31,11 +31,14 @@ import os
 from datetime import datetime, date, time, timedelta
 from pathlib import Path
 
+from data_paths import migrate_legacy_data_files, resolve_data_path
+
 # Garante saida UTF-8 mesmo em consoles Windows (cp1252).
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-DB = Path(__file__).with_name("eventos.json")
+migrate_legacy_data_files()
+DB = resolve_data_path("eventos.json")
 FMT = "%Y-%m-%d %H:%M"
 DATA_FMT = "%Y-%m-%d"
 ALERTAS_MIN = [60, 30, 15]  # 1h, 30min, 15min antes
@@ -43,8 +46,8 @@ ALERTA_MIN = 60  # Minutos de antecedência para notificações (usado pelo noti
 REPEATS = ("none", "daily", "weekdays", "weekly", "monthly")
 
 # Google Calendar integration
-GOOGLE_CREDENTIALS_FILE = Path(__file__).with_name("credentials.json")
-GOOGLE_TOKEN_FILE = Path(__file__).with_name("token.json")
+GOOGLE_CREDENTIALS_FILE = resolve_data_path("credentials.json")
+GOOGLE_TOKEN_FILE = resolve_data_path("token.json")
 GOOGLE_CALENDAR_ID = "primary"  # Use 'primary' for the main calendar
 
 # Try to import Google Calendar libraries
