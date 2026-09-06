@@ -98,6 +98,47 @@
     .day-panel {
       min-width: 0;
     }
+
+    /* Dropdown Menu Styles */
+    #view-menu {
+      opacity: 0;
+      transform: translateY(-10px);
+      pointer-events: none;
+      transition: all 0.2s ease;
+      background-color: #e5e7eb !important;
+    }
+
+    #view-menu.active {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+      animation: slideDown 0.2s ease-out;
+    }
+
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .dropdown-item {
+      line-height: 1.2;
+    }
+
+    .menu-trigger {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .menu-trigger:hover svg {
+      stroke-width: 2.5;
+    }
   </style>
   <script src="https://unpkg.com/htmx.org@1.9.12"></script>
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -111,10 +152,40 @@
 </head>
 <body class="bg-base-200 min-h-screen">
   <div class="max-w-5xl mx-auto p-4 space-y-4">
-    <header class="flex items-center justify-center gap-4">
-      <h1 class="text-2xl font-bold">
-        📅 Agenda Brasileira Definitiva
-      </h1>
+    <header class="flex items-center gap-2">
+      <div class="relative group">
+        <div tabindex="0" role="button" class="menu-trigger p-2 hover:bg-base-200 rounded-lg cursor-pointer transition-colors" id="menu-trigger">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-800">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="8" y1="9" x2="16" y2="9" />
+            <line x1="8" y1="12" x2="16" y2="12" />
+            <line x1="8" y1="15" x2="16" y2="15" />
+          </svg>
+        </div>
+        <div id="view-menu" class="dropdown-menu absolute top-full left-0 mt-1 bg-base-100 border border-base-300 rounded-lg shadow-lg p-2 min-w-max z-50 hidden">
+          <div class="dropdown-item p-3 cursor-pointer hover:bg-base-200 rounded text-base-content transition-colors" 
+               hx-get="/agenda?view=day&date={{ selected_date.isoformat() if selected_date else hoje }}" 
+               data-view="day" hx-target="#calendar" hx-swap="outerHTML">
+            <span class="font-medium">📅 Dia</span>
+            <span class="text-xs opacity-95 block">View de dia</span>
+          </div>
+          <div class="dropdown-item p-3 cursor-pointer hover:bg-base-200 rounded text-base-content transition-colors" data-view="week">
+            <span class="font-medium">📆 Semana</span>
+            <span class="text-xs opacity-95 block">View de semana</span>
+          </div>
+          <div class="dropdown-item p-3 cursor-pointer hover:bg-base-200 rounded text-base-content transition-colors" data-view="month">
+            <span class="font-medium">📊 Mês</span>
+            <span class="text-xs opacity-95 block">View padrão</span>
+          </div>
+          <div class="divider m-1"></div>
+          <div class="dropdown-item p-3 cursor-pointer hover:bg-base-200 rounded text-base-content transition-colors" data-action="config">
+            <span class="font-medium">⚙️ Configurações</span>
+            <span class="text-xs opacity-80 block">Abrir config</span>
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center justify-center w-full">
+      </div>
     </header>
     <div id="alerts-container">
         {{ alerts_html|safe }}
@@ -356,6 +427,90 @@
       }
       sincronizarLayoutPeriodo();
       iniciarDragAndDropAgenda();
+    });
+  })();
+
+  // Definir funcoes globais PRIMEIRO
+  window.trocarView = function (view) {
+    console.log('[MENU] Trocando view:', view);
+    const date = new Date().toISOString().slice(0, 10);
+    const calendar = document.getElementById('calendar');
+    const dayPanel = document.getElementById('day-panel');
+
+    if (view === 'day') {
+      if (calendar) calendar.style.display = 'none';
+      if (dayPanel) dayPanel.style.display = '';
+      document.body.dataset.editMode = 'false';
+      return;
+    }
+
+    document.body.dataset.editMode = 'false';
+    if (calendar) calendar.style.display = '';
+    if (dayPanel) dayPanel.style.display = 'none';
+
+    if (window.htmx) {
+      htmx.ajax('GET', '/agenda?view=' + encodeURIComponent(view) + '&date=' + encodeURIComponent(date), {
+        target: '#calendar',
+        swap: 'outerHTML'
+      });
+    } else {
+      window.location.href = '/agenda?view=' + encodeURIComponent(view) + '&date=' + encodeURIComponent(date);
+    }
+  };
+
+  window.abrirConfig = function () {
+    console.log('[MENU] Abrindo config');
+    const configModal = document.getElementById('config-modal');
+    if (configModal && typeof configModal.showModal === 'function') {
+      configModal.showModal();
+    }
+  };
+
+  // View Menu Dropdown Handler
+  (function () {
+    const menuTrigger = document.getElementById('menu-trigger');
+    const viewMenu = document.getElementById('view-menu');
+    let menuOpenTimeout = null;
+
+    function abrirMenuDropdown() {
+      clearTimeout(menuOpenTimeout);
+      viewMenu.classList.add('active');
+      viewMenu.style.display = 'block';
+    }
+
+    function fecharMenuDropdown() {
+      menuOpenTimeout = setTimeout(function () {
+        viewMenu.classList.remove('active');
+        setTimeout(function () {
+          viewMenu.style.display = 'none';
+        }, 200);
+      }, 100);
+    }
+
+    if (menuTrigger) {
+      menuTrigger.addEventListener('mouseenter', abrirMenuDropdown);
+      menuTrigger.addEventListener('mouseleave', fecharMenuDropdown);
+    }
+
+    if (viewMenu) {
+      viewMenu.addEventListener('mouseenter', abrirMenuDropdown);
+      viewMenu.addEventListener('mouseleave', fecharMenuDropdown);
+    }
+
+    const menuItems = document.querySelectorAll('.dropdown-item');
+    menuItems.forEach(function (item) {
+      item.addEventListener('click', function () {
+        const view = item.getAttribute('data-view');
+        const action = item.getAttribute('data-action');
+
+        if (view) {
+          window.trocarView(view);
+        } else if (action === 'config') {
+          window.abrirConfig();
+        }
+
+        fecharMenuDropdown();
+      });
     });
   })();
 </script>
