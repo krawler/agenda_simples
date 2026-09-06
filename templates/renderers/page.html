@@ -204,6 +204,8 @@
     </div>
   </div>
 
+    {{ create_event_modal|safe }}
+
   <dialog id="duracao-modal" class="modal">
     <div class="modal-box">
       <h3 class="font-bold text-lg">Duração do evento</h3>
@@ -232,6 +234,7 @@
   </dialog>
 
   {{ duracao_modal_js|safe }}
+  {{ create_event_modal_js|safe }}
   {{ sync_modal_js|safe }}
 </body>
 <script>
