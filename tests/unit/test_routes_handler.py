@@ -4,6 +4,7 @@ import unittest
 from datetime import date
 from pathlib import Path
 import sys
+from unittest.mock import patch
 
 import renderers
 
@@ -210,6 +211,34 @@ class RoutesHandlerTests(unittest.TestCase):
         self.assertIn('Excluir evento', html)
         self.assertIn('Marcar como cancelado', html)
         self.assertIn('Marcar como concluído', html)
+
+    def test_render_period_view_day_renders_empty_rows_with_center_icon(self):
+        with patch.object(renderers.agenda, "expandir", return_value=[]), patch.object(renderers.agenda, "carregar", return_value=[]):
+            html = renderers.render_period_view(date(2026, 8, 25), view="day")
+        self.assertIn('Nenhum evento neste dia', html)
+        self.assertIn("absolute inset-0 flex items-center justify-center pointer-events-none z-20", html)
+        self.assertIn('data-drop-hour="0"', html)
+
+    def test_render_period_view_day_renders_hour_button_next_to_existing_events(self):
+        evento = {
+            "id": 10,
+            "titulo": "Reunião",
+            "inicio": "2026-08-25 09:00",
+            "dur": 60,
+            "desc": "",
+            "repeat": None,
+            "until": None,
+            "concluido": False,
+            "cancelado": False,
+        }
+
+        occ = __import__("datetime").datetime(2026, 8, 25, 9, 0)
+        with patch.object(renderers.agenda, "carregar", return_value=[evento]), patch.object(renderers.agenda, "expandir", return_value=[(occ, evento)]):
+            html = renderers.render_period_view(date(2026, 8, 25), view="day")
+
+        self.assertIn('data-event-id="10"', html)
+        self.assertIn('absolute inset-0 flex items-center justify-center pointer-events-none z-20', html)
+        self.assertIn('abrirNovoEventoModal(\'2026-08-25\', \'09:00\')', html)
 
     def test_post_move_event_updates_datetime(self):
         handler = self._make_handler(method="POST", path="/move?id=1&date=2026-08-26&time=15:30&panel_date=2026-08-26")

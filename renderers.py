@@ -257,79 +257,86 @@ def render_period_view(selected_date=None, view="day"):
     start = datetime.combine(selected_date, time.min)
     end = datetime.combine(selected_date, time.max)
     itens = agenda.expandir(agenda.carregar(), start, end)
+    por_hora = {hour: [] for hour in range(24)}
+    for occ, e in itens:
+      por_hora.setdefault(occ.hour, []).append((occ, e))
 
-    if not itens:
-        lines = "<div class='text-center opacity-50 py-10'>Nenhum evento neste dia.</div>"
-        timeline_rows = "".join(
-            f"<div class=\"agenda-hour-row grid grid-cols-[72px_minmax(0,1fr)] border-t border-base-300 min-h-[42px] agenda-drop-zone\" "
-            f"data-drop-date=\"{selected_date.isoformat()}\" data-drop-hour=\"{hour}\" data-drop-time=\"{hour:02d}:00\">"
-            f"<div class='agenda-hour-label px-2 py-2 text-right text-xs font-medium opacity-70'>{hour:02d}:00</div>"
-            f"<div class='px-2 py-2'></div>"
-            f"</div>"
-            for hour in range(24)
+    linhas = []
+    for hour in range(24):
+      has_events = bool(por_hora.get(hour))
+      content_class = (
+        "agenda-hour-events flex flex-wrap gap-2 items-stretch w-full overflow-hidden pr-10"
+        if has_events
+        else "text-xs text-base-content/40 px-2 py-2 text-center"
+      )
+
+      cards = []
+      for occ, e in por_hora.get(hour, []):
+        fim = occ + timedelta(minutes=e.get("dur", 0)) if e.get("dur") else occ
+        desc = ""
+        if e.get("desc"):
+          resumo = esc(e.get('desc', ''))
+          desc = f"<div class='mt-1 text-[10px] leading-relaxed opacity-60'>{resumo[:90]}{('…' if len(str(e.get('desc', ''))) > 90 else '')}</div>"
+
+        edit_url = f"/edit?id={e.get('id', 0)}&date={occ.date().isoformat()}"
+        titulo = esc(e.get('titulo', 'Evento'))
+        menu = (
+          "<div class='dropdown dropdown-end ml-auto'>"
+          "<div tabindex='0' role='button' class='btn btn-ghost btn-xs btn-circle border-0 hover:bg-base-300/70 p-0 h-6 w-6 min-h-0' aria-label='Ações do evento'>"
+          "<svg viewBox='0 0 20 20' fill='currentColor' class='w-4 h-4'><path d='M4 7.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm6 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm6 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3zM4 13.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm6 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm6 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3z' /></svg>"
+          "</div>"
+          "<ul tabindex='0' class='dropdown-content z-20 menu p-2 shadow bg-base-100 rounded-box w-52 border border-base-200'>"
+          f"<li><button type='button' class='text-left' hx-get=\"/edit?id={e.get('id', 0)}&date={occ.date().isoformat()}\" hx-target=\"#day-panel\">Editar evento</button></li>"
+          f"<li><button type='button' class='text-left text-error' hx-post=\"/delete?id={e.get('id', 0)}&date={occ.date().isoformat()}\" hx-target=\"#day-panel\" hx-confirm=\"Remover '{titulo}'?\">Excluir evento</button></li>"
+          f"<li><form hx-post=\"/update\" hx-target=\"#day-panel\" class='contents'><input type='hidden' name='id' value='{e.get('id', 0)}'><input type='hidden' name='date' value='{occ.date().isoformat()}'><input type='hidden' name='time' value='{occ.strftime('%H:%M')}'><input type='hidden' name='dur' value='{e.get('dur') or ''}'><input type='hidden' name='titulo' value='{titulo}'><input type='hidden' name='panel_date' value='{occ.date().isoformat()}'><input type='hidden' name='status' value='cancelado'><button type='submit' class='text-left w-full'>Marcar como cancelado</button></form></li>"
+          f"<li><form hx-post=\"/update\" hx-target=\"#day-panel\" class='contents'><input type='hidden' name='id' value='{e.get('id', 0)}'><input type='hidden' name='date' value='{occ.date().isoformat()}'><input type='hidden' name='time' value='{occ.strftime('%H:%M')}'><input type='hidden' name='dur' value='{e.get('dur') or ''}'><input type='hidden' name='titulo' value='{titulo}'><input type='hidden' name='panel_date' value='{occ.date().isoformat()}'><input type='hidden' name='status' value='concluido'><button type='submit' class='text-left w-full'>Marcar como concluído</button></form></li>"
+          "</ul>"
+          "</div>"
         )
-    else:
-        linhas = []
-        por_hora = {hour: [] for hour in range(24)}
-        for occ, e in itens:
-            por_hora.setdefault(occ.hour, []).append((occ, e))
+        cards.append(
+          "<div class=\"agenda-event rounded-xl border border-primary/30 bg-base-200 p-2 shadow-sm cursor-move flex items-start gap-2\" draggable=\"true\" "
+          f"data-event-id=\"{e.get('id', 0)}\" "
+          f"data-event-date=\"{occ.date().isoformat()}\" "
+          f"data-event-time=\"{occ.strftime('%H:%M')}\" "
+          f"data-drop-date=\"{selected_date.isoformat()}\" "
+          f"data-drop-hour=\"{hour}\" "
+          f"data-confirmar-movimentacao=\"true\" "
+          f"data-edit-url=\"{edit_url}\">"
+          f"<div class='flex-1 min-w-0'><div class='text-[10px] uppercase tracking-wide font-semibold opacity-70'>{occ:%H:%M} - {fim:%H:%M}</div><div class='font-semibold mt-1 text-xs'>{titulo}</div>{desc}</div>"
+          f"{menu}"
+          "</div>"
+        )
 
-        for hour in range(24):
-            cards = []
-            for occ, e in por_hora.get(hour, []):
-                fim = occ + timedelta(minutes=e.get("dur", 0)) if e.get("dur") else occ
-                desc = ""
-                if e.get("desc"):
-                    desc = f"<div class='mt-1 text-[10px] leading-relaxed opacity-60'>{esc(e.get('desc', ''))[:90]}{('…' if len(str(e.get('desc', ''))) > 90 else '')}</div>"
+      content = (
+        f"<div class='{content_class}' style='display: flex; flex-wrap: wrap; gap: 0.5rem;'>"
+        f"{''.join(cards) if cards else '—'}"
+        "</div>"
+      )
 
-                edit_url = f"/edit?id={e.get('id', 0)}&date={occ.date().isoformat()}"
-                titulo = esc(e.get('titulo', 'Evento'))
-                menu = (
-                    "<div class='dropdown dropdown-end ml-auto'>"
-                    "<div tabindex='0' role='button' class='btn btn-ghost btn-xs btn-circle border-0 hover:bg-base-300/70 p-0 h-6 w-6 min-h-0' aria-label='Ações do evento'>"
-                    "<svg viewBox='0 0 20 20' fill='currentColor' class='w-4 h-4'><path d='M4 7.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm6 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm6 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3zM4 13.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm6 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm6 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3z' /></svg>"
-                    "</div>"
-                    "<ul tabindex='0' class='dropdown-content z-20 menu p-2 shadow bg-base-100 rounded-box w-52 border border-base-200'>"
-                    f"<li><button type='button' class='text-left' hx-get=\"/edit?id={e.get('id', 0)}&date={occ.date().isoformat()}\" hx-target=\"#day-panel\">Editar evento</button></li>"
-                    f"<li><button type='button' class='text-left text-error' hx-post=\"/delete?id={e.get('id', 0)}&date={occ.date().isoformat()}\" hx-target=\"#day-panel\" hx-confirm=\"Remover '{titulo}'?\">Excluir evento</button></li>"
-                    f"<li><form hx-post=\"/update\" hx-target=\"#day-panel\" class='contents'><input type='hidden' name='id' value='{e.get('id', 0)}'><input type='hidden' name='date' value='{occ.date().isoformat()}'><input type='hidden' name='time' value='{occ.strftime('%H:%M')}'><input type='hidden' name='dur' value='{e.get('dur') or ''}'><input type='hidden' name='titulo' value='{titulo}'><input type='hidden' name='panel_date' value='{occ.date().isoformat()}'><input type='hidden' name='status' value='cancelado'><button type='submit' class='text-left w-full'>Marcar como cancelado</button></form></li>"
-                    f"<li><form hx-post=\"/update\" hx-target=\"#day-panel\" class='contents'><input type='hidden' name='id' value='{e.get('id', 0)}'><input type='hidden' name='date' value='{occ.date().isoformat()}'><input type='hidden' name='time' value='{occ.strftime('%H:%M')}'><input type='hidden' name='dur' value='{e.get('dur') or ''}'><input type='hidden' name='titulo' value='{titulo}'><input type='hidden' name='panel_date' value='{occ.date().isoformat()}'><input type='hidden' name='status' value='concluido'><button type='submit' class='text-left w-full'>Marcar como concluído</button></form></li>"
-                    "</ul>"
-                    "</div>"
-                )
-                cards.append(
-                    "<div class=\"agenda-event rounded-xl border border-primary/30 bg-base-200 p-2 shadow-sm cursor-move flex items-start gap-2\" draggable=\"true\" "
-                    f"data-event-id=\"{e.get('id', 0)}\" "
-                    f"data-event-date=\"{occ.date().isoformat()}\" "
-                    f"data-event-time=\"{occ.strftime('%H:%M')}\" "
-                    f"data-drop-date=\"{selected_date.isoformat()}\" "
-                    f"data-drop-hour=\"{hour}\" "
-                    f"data-confirmar-movimentacao=\"true\" "
-                    f"data-edit-url=\"{edit_url}\">"
-                    f"<div class='flex-1 min-w-0'><div class='text-[10px] uppercase tracking-wide font-semibold opacity-70'>{occ:%H:%M} - {fim:%H:%M}</div><div class='font-semibold mt-1 text-xs'>{titulo}</div>{desc}</div>"
-                    f"{menu}"
-                    "</div>"
-                )
+      linhas.append(
+        f"<div class=\"agenda-hour-row group relative grid grid-cols-[72px_minmax(0,1fr)] border-t border-base-300 min-h-[28px] agenda-drop-zone\" "
+        f"data-drop-date=\"{selected_date.isoformat()}\" data-drop-hour=\"{hour}\" data-drop-time=\"{hour:02d}:00\" "
+        f"data-confirmar-movimentacao=\"true\">"
+        f"<div class='agenda-hour-label px-2 py-2 text-right text-xs font-medium opacity-70'>{hour:02d}:00</div>"
+        f"<div class='px-2 py-2 relative min-h-[42px] overflow-hidden'>"
+        f"{content}"
+        f"<div class='absolute inset-0 flex items-center justify-center pointer-events-none z-20'>"
+        f"  <button type='button' class='agenda-hour-add btn btn-ghost btn-xs btn-circle opacity-0 pointer-events-none transition-all duration-200 group-hover:opacity-100 group-hover:pointer-events-auto' "
+        f"aria-label='Adicionar evento às {hour:02d}:00' onclick=\"abrirNovoEventoModal('{selected_date.isoformat()}', '{hour:02d}:00')\">"
+        "    <svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='1.5' stroke='currentColor' class='size-6'>"
+        "      <path stroke-linecap='round' stroke-linejoin='round' d='M12 4.5v15m7.5-7.5h-15' />"
+        "    </svg>"
+        "  </button>"
+        "</div>"
+        "</div>"
+        "</div>"
+      )
 
-            if cards:
-                content = (
-                    "<div class='agenda-hour-events flex flex-wrap gap-2 items-stretch w-full overflow-hidden' style='display: flex; flex-wrap: wrap; gap: 0.5rem;'>"
-                    + "".join(cards) +
-                    "</div>"
-                )
-            else:
-                content = "<div class='text-xs text-base-content/40 px-2 py-2'>—</div>"
-
-            linhas.append(
-                f"<div class=\"agenda-hour-row grid grid-cols-[72px_minmax(0,1fr)] border-t border-base-300 min-h-[28px] agenda-drop-zone\" "
-                f"data-drop-date=\"{selected_date.isoformat()}\" data-drop-hour=\"{hour}\" data-drop-time=\"{hour:02d}:00\" "
-                f"data-confirmar-movimentacao=\"true\">"
-                f"<div class='agenda-hour-label px-2 py-2 text-right text-xs font-medium opacity-70'>{hour:02d}:00</div>"
-                f"<div class='px-2 py-2'>{content}</div>"
-                f"</div>"
-            )
-        timeline_rows = "".join(linhas)
-        lines = timeline_rows
+    timeline_rows = "".join(linhas)
+    lines = (
+      ("<div class='text-center opacity-50 py-10'>Nenhum evento neste dia.</div>" if not itens else "")
+      + timeline_rows
+    )
 
     return (
         f'<div id="calendar" class="card bg-base-100 shadow-md calendar-view" data-view="{view_name}" data-date="{selected_date.isoformat()}">'
@@ -343,6 +350,121 @@ def render_period_view(selected_date=None, view="day"):
         f'</div>'
         f'</div>'
     )
+
+
+def render_novo_evento_form(d, time_value="09:00"):
+    iso = d.isoformat()
+    opts = "".join(
+        f'<option value="{r}"{" selected" if r == "repeat" or r == "none" else ""}>'
+        f'{"sem repetição" if r == "none" else r}</option>'
+        for r in agenda.REPEATS)
+
+    status_opts_novo = ''.join([
+        '<option value="">Status</option>',
+        '<option value="concluido">Concluído</option>',
+        '<option value="cancelado">Cancelado</option>'
+    ])
+
+    return f'''<form hx-post="/event" hx-target="#day-panel" hx-swap="outerHTML" class="space-y-2" data-new-event-form hx-on:htmx:afterRequest="fecharNovoEventoModal()">
+      <input type="hidden" name="panel_date" value="{iso}">
+      <input name="titulo" required placeholder="Título" type="text"
+        class="input input-bordered input-sm w-full"
+        data-balloon-content="Preencha o título do evento"
+        data-balloon-pos="right"
+        data-balloon-class="balloon-dark">
+      <div class="flex gap-2">
+        <input type="date" name="date" value="{iso}" required
+          class="input input-bordered input-sm flex-1"
+          data-balloon-content="Selecione a data do evento"
+          data-balloon-pos="right"
+          data-balloon-class="balloon-dark">
+        <input type="time" name="time" value="{time_value}" required
+          class="input input-bordered input-sm w-28"
+          data-balloon-content="Defina a hora de início"
+          data-balloon-pos="right"
+          data-balloon-class="balloon-dark">
+        <input type="number" name="dur" min="1" placeholder="min"
+          class="input input-bordered input-sm w-24 duration-field" id="dur-new" title="duração em minutos"
+          data-balloon-content="Duração em minutos"
+          data-balloon-pos="right"
+          data-balloon-class="balloon-dark">
+      </div>
+      <div class="flex grid md:grid-cols-3 gap-2">
+        <select name="repeat" class="select select-bordered select-sm flex-1"
+          data-balloon-content="Tipo de repetição"
+          data-balloon-pos="right"
+          data-balloon-class="balloon-dark">
+          {opts}
+        </select>
+        <input type="date" name="until" title="repetir até (opcional)"
+          class="input input-bordered input-sm w-full"
+          data-balloon-content="Data limite para repetição (opcional)"
+          data-balloon-pos="right"
+          data-balloon-class="balloon-dark">
+        <select name="status" class="select select-bordered select-sm flex-1"
+                data-balloon-content="Status do evento"
+                data-balloon-pos="right"
+                data-balloon-class="balloon-dark">
+                {status_opts_novo}
+              </select>
+      </div>
+      <input name="desc" placeholder="Descrição (opcional)"
+        class="input input-bordered input-sm w-full"
+        data-balloon-content="Descrição opcional do evento"
+        data-balloon-pos="right"
+        data-balloon-class="balloon-dark">
+      <div class="flex gap-2">
+        <button type="submit" class="btn btn-primary btn-sm flex-1">Adicionar</button>
+        <button type="button" class="btn btn-ghost btn-sm bg-gray-100 flex-1" onclick="fecharNovoEventoModal(); return false;">Cancelar</button>
+      </div>
+    </form>'''
+
+
+CREATE_EVENT_MODAL_JS = """
+  <script>
+    window.abrirNovoEventoModal = function (dateValue, timeValue) {
+      const modal = document.getElementById('novo-evento-modal');
+      const content = document.getElementById('novo-evento-modal-content');
+      const template = document.getElementById('novo-evento-template');
+
+      if (!modal || !content || !template) {
+        return;
+      }
+
+      const panelDate = dateValue || new Date().toISOString().slice(0, 10);
+      const panelTime = timeValue || '09:00';
+
+      content.innerHTML = template.innerHTML;
+      const dateInput = content.querySelector('input[name="date"]');
+      const timeInput = content.querySelector('input[name="time"]');
+      const panelDateInput = content.querySelector('input[name="panel_date"]');
+
+      if (dateInput) dateInput.value = panelDate;
+      if (timeInput) timeInput.value = panelTime;
+      if (panelDateInput) panelDateInput.value = panelDate;
+
+      if (window.htmx && typeof window.htmx.process === 'function') {
+        window.htmx.process(content);
+      }
+
+      modal.showModal();
+
+      const tituloInput = content.querySelector('input[name="titulo"]');
+      if (tituloInput) {
+        setTimeout(function () {
+          tituloInput.focus();
+        }, 0);
+      }
+    };
+
+    window.fecharNovoEventoModal = function () {
+      const modal = document.getElementById('novo-evento-modal');
+      if (modal && modal.open) {
+        modal.close();
+      }
+    };
+  </script>
+"""
 
 
 def render_evento_item(occ, e):
@@ -452,74 +574,10 @@ def render_day_panel(d, editando=None):
     else:
         lista = ('<div class="text-center opacity-50 py-6">Nenhum evento '
                  'neste dia.</div>')
-    iso = d.isoformat()
-    opts = "".join(
-        f'<option value="{r}"{" selected" if r == "repeat" or r == "none" else ""}>'
-        f'{"sem repetição" if r == "none" else r}</option>'
-        for r in agenda.REPEATS)
-
-    status_opts_novo = ''.join([
-        '<option value="">Status</option>',
-        '<option value="concluido">Concluído</option>',
-        '<option value="cancelado">Cancelado</option>'
-    ])
-
     novo_evento = ""
     if editando is None:
         novo_evento = f'''<div class="divider my-2">Novo evento</div>
-    <form hx-post="/event" hx-target="#day-panel" class="space-y-2" data-duration-confirm>
-      <input type="hidden" name="panel_date" value="{iso}">
-      <input name="titulo" required placeholder="Título" type="text"
-        class="input input-bordered input-sm w-full"
-        data-balloon-content="Preencha o título do evento"
-        data-balloon-pos="right"
-        data-balloon-class="balloon-dark">
-      <div class="flex gap-2">
-        <input type="date" name="date" value="{iso}" required
-          class="input input-bordered input-sm flex-1"
-          data-balloon-content="Selecione a data do evento"
-          data-balloon-pos="right"
-          data-balloon-class="balloon-dark">
-        <input type="time" name="time" value="09:00" required
-          class="input input-bordered input-sm w-28"
-          data-balloon-content="Defina a hora de início"
-          data-balloon-pos="right"
-          data-balloon-class="balloon-dark">
-        <input type="number" name="dur" min="1" placeholder="min"
-          class="input input-bordered input-sm w-24 duration-field" id="dur-new" title="duração em minutos"
-          data-balloon-content="Duração em minutos"
-          data-balloon-pos="right"
-          data-balloon-class="balloon-dark">
-      </div>
-      <div class="flex grid md:grid-cols-3 gap-2">
-        <select name="repeat" class="select select-bordered select-sm flex-1"
-          data-balloon-content="Tipo de repetição"
-          data-balloon-pos="right"
-          data-balloon-class="balloon-dark">
-          {opts}
-        </select>
-        <input type="date" name="until" title="repetir até (opcional)"
-          class="input input-bordered input-sm w-full"
-          data-balloon-content="Data limite para repetição (opcional)"
-          data-balloon-pos="right"
-          data-balloon-class="balloon-dark">
-        <select name="status" class="select select-bordered select-sm flex-1"
-                data-balloon-content="Status do evento"
-                data-balloon-pos="right"
-                data-balloon-class="balloon-dark">
-                {status_opts_novo}
-              </select>
-      </div>
-      <input name="desc" placeholder="Descrição (opcional)"
-        class="input input-bordered input-sm w-full"
-        data-balloon-content="Descrição opcional do evento"
-        data-balloon-pos="right"
-        data-balloon-class="balloon-dark">
-      <div class="flex gap-2">
-        <button type="submit" class="btn btn-primary btn-sm flex-1">Adicionar</button>
-        <button type="button" class="btn btn-ghost btn-sm bg-gray-100 flex-1">Cancelar</button>
-      </div>
-    </form>'''
+    {render_novo_evento_form(d)}'''
 
     return _render_template(
         "day_panel.html",
@@ -867,6 +925,18 @@ def render_page(sel, view="month"):
   alerts_html = render_alerts_banner()
   sync_html = render_sync_status()
   config_modal_html = load_config_template()
+  create_event_modal = f'''
+  <dialog id="novo-evento-modal" class="modal modal-bottom sm:modal-middle">
+    <div class="modal-box max-w-2xl">
+      <h3 class="font-bold text-lg mb-4">Novo evento</h3>
+      <div id="novo-evento-modal-content"></div>
+      <div id="novo-evento-template" class="hidden">{render_novo_evento_form(sel)}</div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+      <button>Fechar</button>
+    </form>
+  </dialog>
+'''
   return _render_template(
     "page.html",
     calendar_html=calendar_html,
@@ -875,7 +945,9 @@ def render_page(sel, view="month"):
     alerts_html=alerts_html,
     sync_html=sync_html,
     config_modal_html=config_modal_html,
+    create_event_modal=create_event_modal,
     sync_details_modal=SYNC_DETAILS_MODAL,
+    create_event_modal_js=CREATE_EVENT_MODAL_JS,
     sync_modal_js=SYNC_MODAL_JS,
     duracao_modal_js=DURACAO_MODAL_JS,
   )
