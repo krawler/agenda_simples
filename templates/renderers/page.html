@@ -167,13 +167,15 @@
       cursor: pointer;
       transition: background-color 0.15s ease;
       border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+      outline: none;
     }
 
     .search-result-item:last-child {
       border-bottom: none;
     }
 
-    .search-result-item:hover {
+    .search-result-item:hover,
+    .search-result-item.focused {
       background-color: rgba(59, 130, 246, 0.08);
     }
   </style>
@@ -606,6 +608,108 @@
       }
     }
 
+    function atualizarFocoTeclado() {
+      const itens = Array.from(resultsContainer.querySelectorAll('.search-result-item'));
+      itens.forEach(function (item, index) {
+        item.setAttribute('tabindex', '-1');
+      });
+      const focado = resultsContainer.querySelector('.search-result-item.focused');
+      if (focado) {
+        focado.focus();
+      }
+    }
+
+    input.addEventListener('keydown', function (e) {
+      const itens = Array.from(resultsContainer.querySelectorAll('.search-result-item'));
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (itens.length === 0) return;
+        const focado = resultsContainer.querySelector('.search-result-item.focused');
+        if (!focado) {
+          itens[0].classList.add('focused');
+          itens[0].focus();
+        } else {
+          const idx = itens.indexOf(focado);
+          focado.classList.remove('focused');
+          const prox = itens[idx + 1];
+          if (prox) {
+            prox.classList.add('focused');
+            prox.focus();
+          } else {
+            focado.classList.add('focused');
+            focado.focus();
+          }
+        }
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const focado = resultsContainer.querySelector('.search-result-item.focused');
+        if (!focado) {
+          input.focus();
+          return;
+        }
+        const idx = itens.indexOf(focado);
+        focado.classList.remove('focused');
+        if (idx <= 0) {
+          input.focus();
+        } else {
+          itens[idx - 1].classList.add('focused');
+          itens[idx - 1].focus();
+        }
+      } else if (e.key === 'Enter') {
+        const focado = resultsContainer.querySelector('.search-result-item.focused');
+        if (focado) {
+          focado.click();
+        }
+      }
+    });
+
+    resultsContainer.addEventListener('keydown', function (e) {
+      const itens = Array.from(resultsContainer.querySelectorAll('.search-result-item'));
+      const focado = resultsContainer.querySelector('.search-result-item.focused');
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (!focado) {
+          if (itens.length > 0) {
+            itens[0].classList.add('focused');
+            itens[0].focus();
+          }
+        } else {
+          const idx = itens.indexOf(focado);
+          focado.classList.remove('focused');
+          const prox = itens[idx + 1];
+          if (prox) {
+            prox.classList.add('focused');
+            prox.focus();
+          } else {
+            focado.classList.add('focused');
+            focado.focus();
+          }
+        }
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (!focado) {
+          if (itens.length > 0) {
+            itens[itens.length - 1].classList.add('focused');
+            itens[itens.length - 1].focus();
+          }
+        } else {
+          const idx = itens.indexOf(focado);
+          focado.classList.remove('focused');
+          if (idx <= 0) {
+            input.focus();
+          } else {
+            itens[idx - 1].classList.add('focused');
+            itens[idx - 1].focus();
+          }
+        }
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (focado) {
+          focado.click();
+        }
+      }
+    });
+
     input.addEventListener('input', function () {
       const termo = input.value.trim();
       clearTimeout(debounceTimer);
@@ -628,6 +732,7 @@
           })
           .then(function (html) {
             mostrarResultados(html);
+            atualizarFocoTeclado();
           })
           .catch(function () {
             ocultarResultados();
