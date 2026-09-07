@@ -139,6 +139,43 @@
     .menu-trigger:hover svg {
       stroke-width: 2.5;
     }
+
+    /* Search Results Dropdown */
+    #search-results {
+      display: none;
+      position: absolute;
+      top: calc(100% + 0.5rem);
+      left: 0;
+      right: 0;
+      z-index: 50;
+      background-color: #ffffff;
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      border-radius: 0.75rem;
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
+      max-height: 24rem;
+      overflow-y: auto;
+      padding: 0.5rem;
+    }
+
+    #search-results.active {
+      display: block;
+    }
+
+    .search-result-item {
+      padding: 0.75rem;
+      border-radius: 0.5rem;
+      cursor: pointer;
+      transition: background-color 0.15s ease;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+    }
+
+    .search-result-item:last-child {
+      border-bottom: none;
+    }
+
+    .search-result-item:hover {
+      background-color: rgba(59, 130, 246, 0.08);
+    }
   </style>
   <script src="https://unpkg.com/htmx.org@1.9.12"></script>
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -184,15 +221,17 @@
           </div>
         </div>
       </div>
-      <form action="/pesquisa" method="GET" class="flex-1 min-w-0 ml-2">
+      <form action="/pesquisa" method="GET" class="flex-1 min-w-0 ml-2 relative" id="search-form">
         <div class="relative w-full">
-          <input type="text" name="q" placeholder="Pesquisar eventos..." class="w-full pl-4 pr-12 py-2 rounded-full border border-base-300 bg-base-100 text-base-content focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all" onkeydown="if(event.key==='Enter'){this.form.submit();}" />
+          <input type="text" id="search-q" name="q" placeholder="Pesquisar eventos..." class="w-full pl-4 pr-12 py-2 rounded-full border border-base-300 bg-base-100 text-base-content focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all" onkeydown="if(event.key==='Enter'){this.form.submit();}" autocomplete="off" />
           <button type="submit" class="absolute right-1 top-1/2 -translate-y-1/2 p-1.5 hover:bg-base-200 rounded-full transition-colors" aria-label="Pesquisar">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-base-content">
               <circle cx="11" cy="11" r="8" />
               <line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
           </button>
+        </div>
+        <div id="search-results" class="bg-base-100 border border-base-300 rounded-xl shadow-xl max-h-96 overflow-y-auto mt-2">
         </div>
       </form>
     </header>
@@ -523,6 +562,104 @@
 
         fecharMenuDropdown();
       });
+    });
+  })();
+
+  // Real-time Search Results
+  (function () {
+    const input = document.getElementById('search-q');
+    const resultsContainer = document.getElementById('search-results');
+    let debounceTimer = null;
+
+    if (!input || !resultsContainer) return;
+
+    function ocultarResultados() {
+      resultsContainer.classList.remove('active');
+      resultsContainer.innerHTML = '';
+    }
+
+    function mostrarResultados(html) {
+      resultsContainer.innerHTML = html || '';
+      if (resultsContainer.innerHTML.trim() === '') {
+        resultsContainer.classList.remove('active');
+      } else {
+        resultsContainer.classList.add('active');
+      }
+    }
+
+    input.addEventListener('input', function () {
+      const termo = input.value.trim();
+      clearTimeout(debounceTimer);
+
+      if (termo.length === 0) {
+        ocultarResultados();
+        return;
+      }
+
+      debounceTimer = setTimeout(function () {
+        fetch('/pesquisa?q=' + encodeURIComponent(termo))
+          .then(function (res) {
+            if (!res.ok) throw new Error('Erro na pesquisa');
+            return res.text();
+          })
+          .then(function (html) {
+            mostrarResultados(html);
+          })
+          .catch(function () {
+            ocultarResultados();
+          });
+      }, 250);
+    });
+
+    // Click handler for search results
+    resultsContainer.addEventListener('click', function (e) {
+      const item = e.target.closest('.search-result-item');
+      if (!item) return;
+
+      const eventId = item.getAttribute('data-event-id');
+      const eventDate = item.getAttribute('data-event-date');
+      const editUrl = item.getAttribute('data-edit-url') || ('/edit?id=' + encodeURIComponent(eventId || '0') + '&date=' + encodeURIComponent(eventDate || ''));
+
+      // Hide results and return to no-search state
+      ocultarResultados();
+      input.value = '';
+
+      const calendar = document.getElementById('calendar');
+      const dayPanel = document.getElementById('day-panel');
+      const isMonthView = !!calendar && calendar.style.display !== 'none' && (!dayPanel || dayPanel.style.display === 'none');
+
+      if (isMonthView) {
+        // Move to the event's day in month view
+        if (eventDate) {
+          if (window.htmx) {
+            htmx.ajax('GET', '/agenda?view=month&date=' + encodeURIComponent(eventDate), {
+              target: '#calendar',
+              swap: 'outerHTML'
+            });
+          } else {
+            window.location.href = '/agenda?view=month&date=' + encodeURIComponent(eventDate);
+          }
+        }
+      } else {
+        // Show edit form for the selected event
+        document.body.dataset.editMode = 'true';
+        if (calendar) calendar.style.display = 'none';
+        if (dayPanel) {
+          dayPanel.style.display = '';
+          if (window.htmx) {
+            htmx.ajax('GET', editUrl, { target: '#day-panel', swap: 'innerHTML' });
+          } else {
+            window.location.href = editUrl;
+          }
+        }
+      }
+    });
+
+    // Hide results when clicking outside
+    document.addEventListener('click', function (e) {
+      if (!resultsContainer.contains(e.target) && e.target !== input && !input.contains(e.target)) {
+        ocultarResultados();
+      }
     });
   })();
 </script>
