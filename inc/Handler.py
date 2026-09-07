@@ -146,6 +146,52 @@ class Handler(BaseHTTPRequestHandler):
 	def _serve_static_js(self, relative_path):
 		self._serve_static_file(relative_path, fallback_content_type="application/javascript; charset=utf-8")
 
+	def _render_search_results(self, termo):
+		"""Gera HTML dos resultados da pesquisa para o termo informado."""
+		if not termo:
+			return ""
+		termo_lower = termo.lower()
+		eventos = self.agenda.carregar()
+		resultados = []
+		for e in eventos:
+			titulo = (e.get("titulo") or "").lower()
+			desc = (e.get("desc") or "").lower()
+			if termo_lower in titulo or termo_lower in desc:
+				# Usa a primeira ocorrência para data
+				try:
+					ini = datetime.strptime(e["inicio"], "%Y-%m-%d %H:%M")
+					data_str = ini.strftime("%Y-%m-%d")
+				except Exception:
+					data_str = ""
+				resultados.append({
+					"id": e.get("id", 0),
+					"titulo": e.get("titulo", "Sem título"),
+					"inicio": e.get("inicio", ""),
+					"data": data_str,
+					"dur": e.get("dur"),
+					"desc": e.get("desc", ""),
+					"repeat": e.get("repeat"),
+					"until": e.get("until"),
+				})
+		if not resultados:
+			return '<div class="p-3 text-sm text-gray-500">Nenhum evento encontrado.</div>'
+		html_parts = []
+		for r in resultados:
+			# Sem barra de progresso e sem botão excluir, apenas título, data/hora e descrição resumida
+			linha_titulo = r["titulo"]
+			linha_sub = f"{r['inicio']}"
+			if r.get("dur"):
+				linha_sub += f" · {r['dur']} min"
+			if r.get("desc"):
+				linha_sub += f" · {r['desc']}"
+			html_parts.append(
+				f'<div class="search-result-item" data-event-id="{r["id"]}" data-event-date="{r["data"]}" data-edit-url="/edit?id={r["id"]}&date={r["data"]}">'
+				f'<div class="font-medium text-sm text-base-content">{linha_titulo}</div>'
+				f'<div class="text-xs text-gray-500">{linha_sub}</div>'
+				f'</div>'
+			)
+		return "".join(html_parts)
+
 	def do_GET(self):
 		from urllib.parse import parse_qs, urlparse
 
@@ -209,6 +255,10 @@ class Handler(BaseHTTPRequestHandler):
 					alerts_banner = self.render_alerts_banner()
 					proximos_eventos = self.render_proximos_eventos_dia(d)
 					self._send(alerts_banner + proximos_eventos)
+				case "/pesquisa":
+					termo = q.get("q", [""])[0] or ""
+					html_resultados = self._render_search_results(termo)
+					self._send(html_resultados)
 				case "/config":
 					self._send(self.load_config_template())
 				case "/sync-stream":
