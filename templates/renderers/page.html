@@ -299,6 +299,7 @@
       const dayPanel = document.getElementById('day-panel');
 
       document.body.dataset.editMode = 'false';
+      document.body.dataset.showCalendarWithEdit = 'false';
 
       if (calendar) {
         calendar.style.display = '';
@@ -323,12 +324,21 @@
       const shell = document.getElementById('calendar-shell');
       const dayPanel = document.getElementById('day-panel');
       const editMode = document.body.dataset.editMode === 'true';
+      const showBoth = document.body.dataset.showCalendarWithEdit === 'true';
 
       if (!shell) {
         return;
       }
 
       const isPeriodView = !!calendar && !!calendar.dataset.view && ['day', 'week', 'month'].includes(calendar.dataset.view);
+
+      if (showBoth) {
+        shell.classList.remove('calendar-shell-expanded');
+        if (calendar) calendar.style.display = '';
+        if (dayPanel) dayPanel.style.display = '';
+        return;
+      }
+
       shell.classList.toggle('calendar-shell-expanded', isPeriodView && !editMode);
 
       if (dayPanel) {
@@ -358,6 +368,7 @@
           const calendar = document.getElementById('calendar');
 
           document.body.dataset.editMode = 'true';
+          document.body.dataset.showCalendarWithEdit = 'false';
           if (calendar) {
             calendar.style.display = 'none';
           }
@@ -492,10 +503,12 @@
       if (calendar) calendar.style.display = 'none';
       if (dayPanel) dayPanel.style.display = '';
       document.body.dataset.editMode = 'false';
+      document.body.dataset.showCalendarWithEdit = 'false';
       return;
     }
 
     document.body.dataset.editMode = 'false';
+    document.body.dataset.showCalendarWithEdit = 'false';
     if (calendar) calendar.style.display = '';
     if (dayPanel) dayPanel.style.display = 'none';
 
@@ -652,9 +665,9 @@
           }
         }
       } else {
-        // Show edit form for the selected event
+        // Show edit form for the selected event, keeping calendar visible
         document.body.dataset.editMode = 'true';
-        if (calendar) calendar.style.display = 'none';
+        document.body.dataset.showCalendarWithEdit = 'true';
         if (dayPanel) {
           dayPanel.style.display = '';
           if (window.htmx) {
