@@ -578,6 +578,12 @@
       resultsContainer.innerHTML = '';
     }
 
+    function mostrarMensagem(mensagem, comSpinner) {
+      const spinnerHtml = comSpinner ? '<span class="loading loading-spinner loading-xs mr-2"></span>' : '';
+      resultsContainer.innerHTML = '<div class="p-3 text-sm text-gray-500">' + spinnerHtml + mensagem + '</div>';
+      resultsContainer.classList.add('active');
+    }
+
     function mostrarResultados(html) {
       resultsContainer.innerHTML = html || '';
       if (resultsContainer.innerHTML.trim() === '') {
@@ -592,7 +598,12 @@
       clearTimeout(debounceTimer);
 
       if (termo.length === 0) {
-        ocultarResultados();
+        mostrarMensagem('Digite um dado de algum evento', false);
+        return;
+      }
+
+      if (termo.length < 4) {
+        mostrarMensagem('Carregando Resultados', true);
         return;
       }
 
