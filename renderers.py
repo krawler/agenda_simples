@@ -340,7 +340,12 @@ def render_period_view(selected_date=None, view="day"):
     return (
         f'<div id="calendar" class="card bg-base-100 shadow-md calendar-view" data-view="{view_name}" data-date="{selected_date.isoformat()}">'
         f'<div class="card-body p-4">'
-        f'<div class="flex items-center justify-center gap-2 mb-3">'
+        f'<div class="flex items-start gap-2">'
+        f'<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"'
+        f' stroke="currentColor" class="size-6 self-start">'
+        f'<path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />'
+        f'</svg>'
+        f'<div class="flex items-center gap-2" style="padding-left: 20rem">'
         f'<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"'
         f' hx-get="/agenda?view=day&date={selected_date - timedelta(days=1)}" hx-target="#calendar" hx-swap="outerHTML" style="cursor:pointer;">'
         f'<path stroke-linecap="round" stroke-linejoin="round" d="m18.75 4.5-7.5 7.5 7.5 7.5m-6-15L5.25 12l7.5 7.5" />'
@@ -351,7 +356,7 @@ def render_period_view(selected_date=None, view="day"):
         f'<path stroke-linecap="round" stroke-linejoin="round" d="m5.25 4.5 7.5 7.5-7.5 7.5m6-15 7.5 7.5-7.5 7.5" />'
         f'</svg>'
         f'</div>'
-
+        f'</div>'
         f'<div class="agenda-day-timeline isolate overflow-visible rounded-xl border border-base-300 bg-base-50">{lines}</div>'
         f'</div>'
         f'</div>'
