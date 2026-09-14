@@ -4,6 +4,7 @@ import unittest
 from datetime import date
 from pathlib import Path
 import sys
+from unittest.mock import patch
 
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -11,6 +12,7 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 import server
+import agenda
 from inc.Handler import Handler
 from inc.handler_logic import (
     build_nearby_events_payload,
@@ -125,6 +127,17 @@ class HandlerRefactorTests(unittest.TestCase):
 
 
 class HandlerLogicTests(unittest.TestCase):
+    def test_sync_imports_before_exporting(self):
+        calls = []
+
+        with patch.object(agenda, "GOOGLE_AVAILABLE", True), \
+                patch.object(agenda, "GOOGLE_CREDENTIALS_FILE", type("P", (), {"exists": staticmethod(lambda: True)})()), \
+                patch.object(agenda, "sync_from_google", side_effect=lambda **kwargs: (calls.append("import"), ([], 0))[1]), \
+                patch.object(agenda, "sync_all_to_google", side_effect=lambda **kwargs: (calls.append("export"), ([], 0))[1]):
+            agenda.sync_all_with_progress(lambda message: None)
+
+        self.assertEqual(calls, ["import", "export"])
+
     def test_parse_alerts_minutes_filters_and_sorts(self):
         self.assertEqual(parse_alerts_minutes("[15, 60, 0, -1, 30]"), [60, 30, 15])
 
