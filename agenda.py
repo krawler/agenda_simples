@@ -556,25 +556,32 @@ def sync_all_to_google(on_progress=None, simulate_error=False):
             continue
 
         # Tenta sincronizar: se tem google_id e ele existe no Google, atualiza; senão cria novo
-        success, action = sync_event_to_google(e)
-        if success:
-            # Só adiciona à lista de exportados se foi CRIADO (não se foi apenas atualizado)
-            # E evita duplicatas por google_id criados nesta sincronização
-            if action == "created":
-                gid = e.get("google_id")
-                if gid and gid not in created_google_ids:
-                    created_google_ids.add(gid)
-                    exportados.append({
-                        "id": e["id"],
-                        "titulo": e["titulo"],
-                        "inicio": e["inicio"],
-                        "google_id": gid,
-                        "repeat": e.get("repeat"),
-                        "until": e.get("until"),
-                        "action": action
-                    })
-        else:
+        try:
+            success, action = sync_event_to_google(e)
+            if success:
+                # Só adiciona à lista de exportados se foi CRIADO (não se foi apenas atualizado)
+                # E evita duplicatas por google_id criados nesta sincronização
+                if action == "created":
+                    gid = e.get("google_id")
+                    if gid and gid not in created_google_ids:
+                        created_google_ids.add(gid)
+                        exportados.append({
+                            "id": e["id"],
+                            "titulo": e["titulo"],
+                            "inicio": e["inicio"],
+                            "google_id": gid,
+                            "repeat": e.get("repeat"),
+                            "until": e.get("until"),
+                            "action": action
+                        })
+            else:
+                progress(f"  Erro ao sincronizar evento {e['id']} ({e['titulo']}): falha na operação com Google Calendar")
+                errors += 1
+        except Exception as ex:
+            progress(f"  Erro ao sincronizar evento {e['id']} ({e['titulo']}): {str(ex)}")
             errors += 1
+        finally:
+            progress(f"  Processado evento {e['id']} ({e['titulo']})")
     
     if exportados or errors > 0:
         salvar(eventos)
@@ -688,7 +695,7 @@ def sync_from_google(on_progress=None, simulate_error=False):
                 "google_id": gid
             })
         except Exception as ex:
-            print(f"Erro ao converter evento do Google: {ex}")
+            progress(f"  Erro ao converter evento do Google ({gid}): {str(ex)}")
             errors += 1
     
     if importados:
@@ -736,7 +743,7 @@ def sync_all_with_progress(on_progress, simulate_error=False):
         capture_progress(msg)
         return msg, exportados, importados, logs
     except RefreshError as e:
-        error_msg = "Não foi possível sincronizar, token de autenticação Google expirado"
+        error_msg = str(e)
         capture_progress(error_msg)
         print(f"Erro de autenticação: {e}")
         return error_msg, [], [], logs
