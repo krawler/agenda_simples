@@ -355,7 +355,6 @@ $(document).ready(function() {
 
     eventSource = new EventSource('/sync-stream');
     $("#sync-google").prop('disabled', true);
-    $("#sync-google").addClass('skeleton');
     $(".loading-infinity").show();
 
     eventSource.onmessage = function(event) {
@@ -370,10 +369,10 @@ $(document).ready(function() {
           $("#sync-container").html('<div id="sync-status"></div>');
           $syncStatus = $("#sync-status");
         }
-        var alertClass = data.status.toLowerCase().includes('sucesso') || data.status.toLowerCase().includes('conclu')
-          ? 'alert alert-success shadow-sm'
-          : data.status.toLowerCase().includes('erro')
-            ? 'alert alert-error shadow-sm'
+        var alertClass = data.status.toLowerCase().includes('erro')
+          ? 'alert alert-error shadow-sm'
+          : data.status.toLowerCase().includes('sucesso') || data.status.toLowerCase().includes('conclu')
+            ? 'alert alert-success shadow-sm'
             : 'alert alert-info shadow-sm';
 
         var detailsLinkHtml = (data.logs && data.logs.length) ? ' <a href="#" class="link link-hover text-xs ml-2" onclick="openSyncDetailsModal(); return false;">Exibir</a>' : '';
@@ -431,7 +430,6 @@ $(document).ready(function() {
         eventSource.close();
       }
       $("#sync-google").prop('disabled', false);
-      $("#sync-google").removeClass('skeleton');
       $(".loading-infinity").hide();
       var detailsLinkHtml = (window.syncLogsData && window.syncLogsData.length) ? ' <a href="#" class="link link-hover text-xs ml-2" onclick="openSyncDetailsModal(); return false;">Exibir</a>' : '';
       $("#sync-status-detail").html('Sincronização interrompido' + detailsLinkHtml);
