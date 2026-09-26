@@ -489,9 +489,9 @@ $(document).ready(function() {
     return '<div id="google-events-list-' + mode + '" class="' + listClass + '">' 
       + '<div class="flex items-center justify-between mb-3">'
       + '<span class="font-semibold">' + modeLabel + '</span>'
-      + '<button type="button" class="btn btn-xs btn-ghost btn-circle close-btn" data-close-target="google-events-list-' + mode + '" title="Fechar">✕</button>'
       + '</div>'
       + '<div class="space-y-3 max-h-80 overflow-y-auto">' + items + '</div>'
+      + '<button type="button" class="btn btn-xs btn-ghost btn-circle close-btn" data-close-target="google-events-list-' + mode + '" title="Fechar">✕</button>'
       + '</div>';
   }
 
