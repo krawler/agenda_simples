@@ -1,0 +1,16 @@
+{
+  "name": "agenda-simples-sync",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Camada Node de sincronizacao RxDB + Firestore para a Agenda Simples (nao interfere no agenda.py/server.py).",
+  "scripts": {
+    "migrate:eventos": "node scripts_node/migrate-eventos.js",
+    "sync:watch": "node scripts_node/watch-sync.js"
+  },
+  "dependencies": {
+    "firebase": "11.10.0",
+    "rxdb": "^16.0.0",
+    "rxjs": "^7.8.1"
+  }
+}

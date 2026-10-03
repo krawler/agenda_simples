@@ -1,10 +1,9 @@
-const { createDatabase } = require('./collections');
-const { rxdbSchemas } = require('./schemas');
-const { migrarJsonParaRxdb, normalizarEventoJson } = require('./migration/json-to-rxdb');
-
-module.exports = {
-  createDatabase,
-  rxdbSchemas,
+export { createDatabase, createEventosCollection } from './collections/index.js';
+export { rxdbSchemas } from './schemas/index.js';
+export {
   migrarJsonParaRxdb,
-  normalizarEventoJson
-};
+  normalizarEventoJson,
+  carregarEventosLegado,
+  resolverCaminhoEventosLegado
+} from './migration/json-to-rxdb.js';
+export { createEventosReplication } from './sync/firestore-replication.js';

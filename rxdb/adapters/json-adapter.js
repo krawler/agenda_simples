@@ -1,9 +1,9 @@
-const fs = require('fs');
-const path = require('path');
-const { normalizarEventoJson } = require('../migration/json-to-rxdb');
+import fs from 'node:fs';
+import path from 'node:path';
+import { normalizarEventoJson, resolverCaminhoEventosLegado } from '../migration/json-to-rxdb.js';
 
 function carregarEventosJson(filePath) {
-  const resolved = path.resolve(filePath);
+  const resolved = path.resolve(filePath ?? resolverCaminhoEventosLegado());
 
   if (!fs.existsSync(resolved)) {
     return [];
@@ -35,8 +35,4 @@ function adapterEventosParaRxdb(eventos) {
   return eventos.map((evento, index) => normalizarEventoJson(evento, index));
 }
 
-module.exports = {
-  carregarEventosJson,
-  salvarEventosJson,
-  adapterEventosParaRxdb
-};
+export { carregarEventosJson, salvarEventosJson, adapterEventosParaRxdb };

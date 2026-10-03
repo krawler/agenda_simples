@@ -1,13 +1,11 @@
-const { eventosSchema } = require('./eventos.schema');
-const { ocorrenciasSchema } = require('./ocorrencias.schema');
-const { lembretesSchema } = require('./lembretes.schema');
-const { syncMetaSchema } = require('./sync-meta.schema');
+import { eventosSchema } from './eventos.schema.js';
+import { ocorrenciasSchema } from './ocorrencias.schema.js';
+import { lembretesSchema } from './lembretes.schema.js';
+import { syncMetaSchema } from './sync-meta.schema.js';
 
-const rxdbSchemas = {
+export const rxdbSchemas = {
   eventos: eventosSchema,
   ocorrencias: ocorrenciasSchema,
   lembretes: lembretesSchema,
   syncMeta: syncMetaSchema
 };
-
-module.exports = { rxdbSchemas };

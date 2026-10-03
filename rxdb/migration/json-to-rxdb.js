@@ -1,5 +1,37 @@
-const fs = require('fs');
-const path = require('path');
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
+
+function resolverCaminhoEventosLegado() {
+  const caminhoNovo = path.join(PROJECT_ROOT, 'data', 'eventos.json');
+  const caminhoAntigo = path.join(PROJECT_ROOT, 'eventos.json');
+
+  if (fs.existsSync(caminhoNovo)) {
+    return caminhoNovo;
+  }
+
+  if (fs.existsSync(caminhoAntigo)) {
+    return caminhoAntigo;
+  }
+
+  throw new Error('Arquivo de eventos legado não encontrado em data/eventos.json nem em eventos.json.');
+}
+
+function normalizarRecorrencia(evento = {}) {
+  const recorrencia = evento.recorrencia ?? {};
+  const diasSemana = Array.isArray(recorrencia.diasSemana ?? evento.diasSemana)
+    ? (recorrencia.diasSemana ?? evento.diasSemana)
+    : [];
+
+  return {
+    tipo: String(recorrencia.tipo ?? evento.repeat ?? 'none'),
+    until: String(recorrencia.until ?? evento.until ?? ''),
+    diasSemana: diasSemana.map((valor) => Number(valor))
+  };
+}
 
 function normalizarEventoJson(evento, index) {
   const agora = new Date().toISOString();
@@ -8,26 +40,22 @@ function normalizarEventoJson(evento, index) {
     id: String(evento.id ?? `evt_${index + 1}`),
     titulo: String(evento.titulo ?? 'Sem título'),
     inicio: evento.inicio ?? evento.inicio_iso ?? new Date().toISOString(),
-    duracaoMinutos: Number(evento.dur ?? 0),
-    descricao: evento.desc ?? '',
+    duracaoMinutos: Number(evento.dur ?? evento.duracaoMinutos ?? 0),
+    descricao: String(evento.desc ?? evento.descricao ?? ''),
     except: Array.isArray(evento.except) ? evento.except : [],
-    recorrencia: {
-      tipo: evento.repeat ?? 'none',
-      until: evento.until ?? '',
-      diasSemana: Array.isArray(evento.diasSemana) ? evento.diasSemana : []
-    },
-    status: evento.status ?? 'ativo',
-    cancelado: Boolean(evento.cancelado),
-    concluido: Boolean(evento.concluido),
-    userId: evento.userId ?? 'local-user',
-    deleted: Boolean(evento.deleted),
+    recorrencia: normalizarRecorrencia(evento),
+    status: String(evento.status ?? 'ativo'),
+    cancelado: Boolean(evento.cancelado ?? false),
+    concluido: Boolean(evento.concluido ?? false),
+    userId: String(evento.userId ?? 'local-user'),
+    removido: Boolean(evento.deleted ?? evento.removido ?? false),
     createdAt: evento.createdAt ?? agora,
     updatedAt: evento.updatedAt ?? agora
   };
 }
 
-async function migrarJsonParaRxdb(jsonPath, collection) {
-  const resolvedPath = path.resolve(jsonPath);
+function carregarEventosLegado(jsonPath) {
+  const resolvedPath = path.resolve(jsonPath ?? resolverCaminhoEventosLegado());
   const raw = fs.readFileSync(resolvedPath, 'utf-8');
   const lista = JSON.parse(raw);
 
@@ -35,17 +63,24 @@ async function migrarJsonParaRxdb(jsonPath, collection) {
     throw new Error('O JSON de origem precisa ser uma lista de eventos.');
   }
 
-  const documentos = lista.map(normalizarEventoJson);
+  return lista.map(normalizarEventoJson);
+}
 
-  if (!collection || typeof collection.bulkInsert !== 'function') {
+async function migrarJsonParaRxdb(jsonPath, collection) {
+  const documentos = carregarEventosLegado(jsonPath);
+
+  if (!collection || typeof collection.bulkUpsert !== 'function') {
     throw new Error('Coleção RxDB inválida para a migração.');
   }
 
-  await collection.bulkInsert(documentos);
+  await collection.bulkUpsert(documentos);
   return documentos;
 }
 
-module.exports = {
+export {
   normalizarEventoJson,
-  migrarJsonParaRxdb
+  normalizarRecorrencia,
+  carregarEventosLegado,
+  migrarJsonParaRxdb,
+  resolverCaminhoEventosLegado
 };

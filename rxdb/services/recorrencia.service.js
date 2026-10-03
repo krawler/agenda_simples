@@ -15,7 +15,4 @@ function eventoEhRecorrente(evento) {
   return Boolean(tipo && tipo !== 'none');
 }
 
-module.exports = {
-  normalizarRecorrencia,
-  eventoEhRecorrente
-};
+export { normalizarRecorrencia, eventoEhRecorrente };

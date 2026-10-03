@@ -1,19 +1,19 @@
-const ocorrenciasSchema = {
+export const ocorrenciasSchema = {
   title: 'ocorrencias',
   version: 0,
+  primaryKey: 'id',
   type: 'object',
   properties: {
-    id: { type: 'string', primary: true },
-    eventoId: { type: 'string' },
-    inicio: { type: 'string', format: 'date-time' },
-    fim: { type: 'string', format: 'date-time' },
-    status: { type: 'string', default: 'pendente' },
+    id: { type: 'string', maxLength: 64 },
+    eventoId: { type: 'string', maxLength: 64 },
+    inicio: { type: 'string', format: 'date-time', maxLength: 32 },
+    fim: { type: 'string', format: 'date-time', maxLength: 32 },
+    status: { type: 'string', maxLength: 32, default: 'pendente' },
     skip: { type: 'boolean', default: false },
-    userId: { type: 'string' },
-    createdAt: { type: 'string', format: 'date-time' },
-    updatedAt: { type: 'string', format: 'date-time' }
+    userId: { type: 'string', maxLength: 64 },
+    createdAt: { type: 'string', format: 'date-time', maxLength: 32 },
+    updatedAt: { type: 'string', format: 'date-time', maxLength: 32 }
   },
-  required: ['id', 'eventoId', 'inicio', 'fim', 'createdAt', 'updatedAt']
+  required: ['id', 'eventoId', 'inicio', 'fim', 'createdAt', 'updatedAt'],
+  indexes: ['eventoId', 'inicio', 'status']
 };
-
-module.exports = { ocorrenciasSchema };

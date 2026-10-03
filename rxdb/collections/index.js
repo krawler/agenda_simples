@@ -1,6 +1,1 @@
-const { createDatabase, createEventosCollection } = require('./eventos.collection');
-
-module.exports = {
-  createDatabase,
-  createEventosCollection
-};
+export { createDatabase, createEventosCollection } from './eventos.collection.js';

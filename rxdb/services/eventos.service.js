@@ -1,13 +1,12 @@
-const { carregarEventosJson, salvarEventosJson } = require('../adapters/json-adapter');
-const { createRxDbRepository } = require('../adapters/rxdb-adapter');
+import { carregarEventosJson, salvarEventosJson } from '../adapters/json-adapter.js';
+import { createRxDbRepository } from '../adapters/rxdb-adapter.js';
 
 function criarEventoService({ filePath, collection } = {}) {
   const repo = createRxDbRepository({ collection });
 
   return {
     async listar() {
-      const eventos = carregarEventosJson(filePath || 'eventos.json');
-      return eventos;
+      return carregarEventosJson(filePath);
     },
 
     async salvar(eventos) {
@@ -20,12 +19,10 @@ function criarEventoService({ filePath, collection } = {}) {
     },
 
     async migrarParaRxdb() {
-      const eventos = carregarEventosJson(filePath || 'eventos.json');
+      const eventos = carregarEventosJson(filePath);
       return repo.bulkInsert(eventos);
     }
   };
 }
 
-module.exports = {
-  criarEventoService
-};
+export { criarEventoService };
