@@ -19,7 +19,7 @@ from inc.handler_logic import (
     parse_alerts_minutes,
     parse_event_form,
 )
-from renderers import render_evento_item
+from renderers import calcular_progresso_evento, render_evento_item
 
 
 class DummyAgenda:
@@ -150,6 +150,13 @@ class HandlerLogicTests(unittest.TestCase):
         self.assertEqual(info["desc"], "nota")
         self.assertEqual(info["dur"], None)
         self.assertEqual(info["repeat"], None)
+
+    def test_calcular_progresso_evento_updates_real_time(self):
+        occ = __import__("datetime").datetime(2026, 8, 25, 9, 0)
+        self.assertEqual(calcular_progresso_evento(occ, 90, occ), 0)
+        self.assertEqual(calcular_progresso_evento(occ, 90, occ + __import__("datetime").timedelta(minutes=45)), 50)
+        self.assertEqual(calcular_progresso_evento(occ, 90, occ + __import__("datetime").timedelta(minutes=90)), 100)
+        self.assertEqual(calcular_progresso_evento(occ, 90, occ + __import__("datetime").timedelta(minutes=120)), 100)
 
     def test_render_evento_item_exposes_meeting_duration_in_minutes(self):
         occ = __import__("datetime").datetime(2026, 8, 25, 9, 0)

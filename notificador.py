@@ -39,6 +39,7 @@ from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+from data_paths import migrate_legacy_data_files, resolve_data_path
 import agenda  # reaproveita carregar()/expandir()/ALERTA_MIN
 
 if hasattr(sys.stderr, "reconfigure"):
@@ -46,7 +47,8 @@ if hasattr(sys.stderr, "reconfigure"):
 
 ALERTA_EMAIL = 60       # minutos (1 hora)
 ALERTA_TELEGRAM = ALERTA_EMAIL  # mesma frequência que o e‑mail
-ENVIADOS = Path(__file__).with_name("enviados.json")
+migrate_legacy_data_files()
+ENVIADOS = resolve_data_path("enviados.json")
 
 
 # --------------------------------------------------------------------- config

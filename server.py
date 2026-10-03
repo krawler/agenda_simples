@@ -74,7 +74,7 @@ class ReusableThreadingHTTPServer(ThreadingHTTPServer):
 def monitorar_arquivos():
     """Monitora arquivos por mudanças e notifica clientes SSE."""
     arquivos_monitorados = [
-        Path(__file__).parent / "eventos.json",
+        agenda.DB,
         Path(__file__).parent / "agenda.py",
         Path(__file__).parent / "server.py",
         TEMPLATES_DIR / "config.htm"

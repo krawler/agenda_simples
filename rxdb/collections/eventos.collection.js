@@ -1,29 +1,39 @@
-const { addRxPlugin, createRxDatabase } = require('rxdb');
-const { RxDBDevModePlugin } = require('rxdb/plugins/dev-mode');
-const { getRxStorageDexie } = require('rxdb/plugins/storage-dexie');
-const { rxdbSchemas } = require('../schemas');
+import { addRxPlugin, createRxDatabase } from 'rxdb/plugins/core';
+import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
+import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
+import { wrappedValidateAjvStorage } from 'rxdb/plugins/validate-ajv';
+import { rxdbSchemas } from '../schemas/index.js';
 
-addRxPlugin(RxDBDevModePlugin);
+let devModeLoaded = false;
+
+function ensureDevMode() {
+  // Node não tem storage persistente por padrão; memory-storage é usada
+  // pelos scripts de migração/sincronização (o app web usará Dexie no navegador).
+  if (!devModeLoaded) {
+    addRxPlugin(RxDBDevModePlugin);
+    devModeLoaded = true;
+  }
+}
 
 async function createEventosCollection(db) {
-  return db.addCollections({
+  const collections = await db.addCollections({
     eventos: {
       schema: rxdbSchemas.eventos
     }
   });
+  return collections.eventos;
 }
 
 async function createDatabase(name = 'agenda_simples_rxdb') {
+  ensureDevMode();
+
   const db = await createRxDatabase({
     name,
-    storage: getRxStorageDexie()
+    storage: wrappedValidateAjvStorage({ storage: getRxStorageMemory() })
   });
 
   await createEventosCollection(db);
   return db;
 }
 
-module.exports = {
-  createDatabase,
-  createEventosCollection
-};
+export { createDatabase, createEventosCollection };

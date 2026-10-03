@@ -1,4 +1,5 @@
-const { adapterEventosParaRxdb } = require('./json-adapter');
+import { adapterEventosParaRxdb } from './json-adapter.js';
+import { carregarEventosJson } from './json-adapter.js';
 
 function createRxDbRepository({ collection, logger = console }) {
   return {
@@ -11,10 +12,6 @@ function createRxDbRepository({ collection, logger = console }) {
         return collection.find().exec();
       }
 
-      if (typeof collection.getAll === 'function') {
-        return collection.getAll();
-      }
-
       return [];
     },
 
@@ -24,15 +21,7 @@ function createRxDbRepository({ collection, logger = console }) {
         return evento;
       }
 
-      if (typeof collection.upsert === 'function') {
-        return collection.upsert(evento);
-      }
-
-      if (typeof collection.insert === 'function') {
-        return collection.insert(evento);
-      }
-
-      return evento;
+      return collection.incrementalUpsert(evento);
     },
 
     async bulkInsert(eventos) {
@@ -42,22 +31,15 @@ function createRxDbRepository({ collection, logger = console }) {
       }
 
       const normalized = adapterEventosParaRxdb(eventos);
-
-      if (typeof collection.bulkInsert === 'function') {
-        await collection.bulkInsert(normalized);
-      }
-
+      await collection.bulkUpsert(normalized);
       return normalized;
     },
 
     async syncFromLegacyJson(filePath) {
-      const { carregarEventosJson } = require('./json-adapter');
       const eventos = carregarEventosJson(filePath);
       return this.bulkInsert(eventos);
     }
   };
 }
 
-module.exports = {
-  createRxDbRepository
-};
+export { createRxDbRepository };

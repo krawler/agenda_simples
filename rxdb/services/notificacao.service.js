@@ -18,7 +18,4 @@ function precisaEnviarLembrete(evento, ocorrencia) {
   return Boolean(evento && ocorrencia && ocorrencia.inicio);
 }
 
-module.exports = {
-  montarMensagemLembrete,
-  precisaEnviarLembrete
-};
+export { montarMensagemLembrete, precisaEnviarLembrete };

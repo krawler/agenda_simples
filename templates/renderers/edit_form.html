@@ -1,5 +1,5 @@
 <li class="p-3 rounded-lg bg-base-200 ring ring-primary ring-1">
-  <form hx-post="/update" hx-target="#day-panel" class="space-y-2" data-duration-confirm>
+  <form hx-post="/update" hx-target="#day-panel" class="space-y-2" data-duration-confirm onsubmit="document.body.dataset.pendingRestore='true';">
     <input type="hidden" name="id" value="{{ e.id }}">
     <input type="hidden" name="panel_date" value="{{ iso }}">
     <input name="titulo" required value="{{ titulo }}" class="input input-bordered input-sm w-full" ...>
@@ -18,7 +18,7 @@
     </div>
     <div class="flex gap-2">
       <button type="submit" class="btn btn-primary btn-sm flex-1">Salvar</button>
-      <button type="button" class="btn btn-ghost btn-sm flex-1" hx-get="/day?date={{ iso }}" hx-target="#day-panel">Cancelar Evento</button>
+      <button type="button" class="btn btn-ghost btn-sm flex-1" onclick="restaurarViewAnterior(); return false;">Cancelar Evento</button>
     </div>
   </form>
 </li>

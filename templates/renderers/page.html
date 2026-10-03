@@ -19,6 +19,165 @@
       max-width: 240px;
       word-break: break-word;
     }
+
+    .calendar-view {
+      transition: all 0.2s ease;
+    }
+
+    .calendar-shell {
+      min-width: 0;
+    }
+
+    .calendar-shell-expanded {
+      grid-column: 1 / -1;
+    }
+
+    .agenda-day-timeline {
+      background: linear-gradient(180deg, rgba(255,255,255,0.72), rgba(248,250,252,0.96));
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+      overflow: hidden;
+    }
+
+    .agenda-hour-row {
+      background: linear-gradient(90deg, rgba(255,255,255,0.52), rgba(248,250,252,0.9));
+      min-height: 24px;
+    }
+
+    .agenda-hour-row + .agenda-hour-row {
+      border-top: 1px solid rgba(148, 163, 184, 0.25);
+    }
+
+    .agenda-hour-events {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: stretch;
+      min-height: 0;
+    }
+
+    .agenda-hour-events > .agenda-event {
+      flex: 1 1 180px;
+      min-width: 150px;
+      max-width: calc(50% - 0.25rem);
+    }
+
+    .agenda-hour-row.agenda-drop-zone.drag-over {
+      background: linear-gradient(90deg, rgba(191,219,254,0.8), rgba(219,234,254,0.95));
+      box-shadow: inset 0 0 0 2px rgba(59, 130, 246, 0.7), 0 0 0 3px rgba(96,165,250,0.18);
+      position: relative;
+    }
+
+    .agenda-hour-row.agenda-drop-zone.drag-over::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: rgba(59, 130, 246, 0.08);
+      pointer-events: none;
+    }
+
+    .agenda-hour-label {
+      color: rgba(71, 85, 105, 0.8);
+      background: rgba(148, 163, 184, 0.05);
+      border-right: 1px solid rgba(148, 163, 184, 0.18);
+    }
+
+    .agenda-event {
+      border-left: 4px solid rgba(59, 130, 246, 0.72);
+      background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(239,246,255,0.72));
+      border-radius: 0.85rem;
+      box-shadow: 0 4px 14px rgba(59, 130, 246, 0.08);
+      transition: transform 0.12s ease, box-shadow 0.12s ease;
+    }
+
+    .agenda-event:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 20px rgba(59, 130, 246, 0.12);
+    }
+
+    .day-panel {
+      min-width: 0;
+    }
+
+    /* Dropdown Menu Styles */
+    #view-menu {
+      opacity: 0;
+      transform: translateY(-10px);
+      pointer-events: none;
+      transition: all 0.2s ease;
+      background-color: #e5e7eb !important;
+    }
+
+    #view-menu.active {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+      animation: slideDown 0.2s ease-out;
+    }
+
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .dropdown-item {
+      line-height: 1.2;
+    }
+
+    .menu-trigger {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .menu-trigger:hover svg {
+      stroke-width: 2.5;
+    }
+
+    /* Search Results Dropdown */
+    #search-results {
+      display: none;
+      position: absolute;
+      top: calc(100% + 0.5rem);
+      left: 0;
+      right: 0;
+      z-index: 50;
+      background-color: #ffffff;
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      border-radius: 0.75rem;
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
+      max-height: 24rem;
+      overflow-y: auto;
+      padding: 0.5rem;
+    }
+
+    #search-results.active {
+      display: block;
+    }
+
+    .search-result-item {
+      padding: 0.75rem;
+      border-radius: 0.5rem;
+      cursor: pointer;
+      transition: background-color 0.15s ease;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+      outline: none;
+    }
+
+    .search-result-item:last-child {
+      border-bottom: none;
+    }
+
+    .search-result-item:hover,
+    .search-result-item.focused {
+      background-color: rgba(59, 130, 246, 0.08);
+    }
   </style>
   <script src="https://unpkg.com/htmx.org@1.9.12"></script>
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -32,11 +191,71 @@
 </head>
 <body class="bg-base-200 min-h-screen">
   <div class="max-w-5xl mx-auto p-4 space-y-4">
-    <header class="flex items-center justify-center gap-4">
-      <h1 class="text-2xl font-bold">
-         <img src="/img/icones_separados/agenda_azul.png" alt="Logo" class="inline-block h-8 w-8 mr-2" />
-         Agenda Brasileira Definitiva
-      </h1>
+    <header class="flex items-center gap-2">
+      <div class="relative group">
+        <div tabindex="0" role="button" class="menu-trigger p-2 hover:bg-base-200 rounded-lg cursor-pointer transition-colors" id="menu-trigger">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-800">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="8" y1="9" x2="16" y2="9" />
+            <line x1="8" y1="12" x2="16" y2="12" />
+            <line x1="8" y1="15" x2="16" y2="15" />
+          </svg>
+        </div>
+        <div id="view-menu" class="dropdown-menu absolute top-full left-0 mt-1 bg-base-100 border border-base-300 rounded-lg shadow-lg p-2 min-w-max z-50 hidden">
+          <div class="dropdown-item p-3 cursor-pointer hover:bg-base-200 rounded text-base-content transition-colors" 
+               hx-get="/agenda?view=day&date={{ selected_date.isoformat() if selected_date else hoje }}" 
+               data-view="day" hx-target="#calendar" hx-swap="outerHTML">
+            <span class="font-medium"> 
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+              </svg>
+              Dia
+            </span>
+            <span class="text-xs opacity-95 block"></span>
+          </div>
+          <div class="dropdown-item p-3 cursor-pointer hover:bg-base-200 rounded text-base-content transition-colors" data-view="week">
+            <span class="font-medium">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 2.994v2.25m10.5-2.25v2.25m-14.252 13.5V7.491a2.25 2.25 0 0 1 2.25-2.25h13.5a2.25 2.25 0 0 1 2.25 2.25v11.251m-18 0a2.25 2.25 0 0 0 2.25 2.25h13.5a2.25 2.25 0 0 0 2.25-2.25m-18 0v-7.5a2.25 2.25 0 0 1 2.25-2.25h13.5a2.25 2.25 0 0 1 2.25 2.25v7.5m-6.75-6h2.25m-9 2.25h4.5m.002-2.25h.005v.006H12v-.006Zm-.001 4.5h.006v.006h-.006v-.005Zm-2.25.001h.005v.006H9.75v-.006Zm-2.25 0h.005v.005h-.006v-.005Zm6.75-2.247h.005v.005h-.005v-.005Zm0 2.247h.006v.006h-.006v-.006Zm2.25-2.248h.006V15H16.5v-.005Z" />
+              </svg>
+              Semana
+            </span>
+            <span class="text-xs opacity-95 block"></span>
+          </div>
+          <div class="dropdown-item p-3 cursor-pointer hover:bg-base-200 rounded text-base-content transition-colors" data-view="month">
+            <span class="font-medium">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5m-9-6h.008v.008H12v-.008ZM12 15h.008v.008H12V15Zm0 2.25h.008v.008H12v-.008ZM9.75 15h.008v.008H9.75V15Zm0 2.25h.008v.008H9.75v-.008ZM7.5 15h.008v.008H7.5V15Zm0 2.25h.008v.008H7.5v-.008Zm6.75-4.5h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V15Zm0 2.25h.008v.008h-.008v-.008Zm2.25-4.5h.008v.008H16.5v-.008Zm0 2.25h.008v.008H16.5V15Z" />
+            </svg>
+            Mês
+            </span>
+            <span class="text-xs opacity-95 block"></span>
+          </div>
+          <div class="divider m-1"></div>
+          <div class="dropdown-item p-3 cursor-pointer hover:bg-base-200 rounded text-base-content transition-colors" data-action="config">
+            <span class="font-medium cols-2">
+                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M11.42 15.17 17.25 21A2.652 2.652 0 0 0 21 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 1 1-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 0 0 4.486-6.336l-3.276 3.277a3.004 3.004 0 0 1-2.25-2.25l3.276-3.276a4.5 4.5 0 0 0-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437 1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008Z" />
+            </svg>
+            Opções
+            </span>
+            <span class="text-xs opacity-80 block"></span>
+          </div>
+        </div>
+      </div>
+      <form action="/pesquisa" method="GET" class="flex-1 min-w-0 ml-2 relative" id="search-form">
+        <div class="relative w-full">
+          <input type="text" id="search-q" name="q" placeholder="Pesquisar eventos..." class="w-full pl-4 pr-12 py-2 rounded-full border border-base-300 bg-base-100 text-base-content focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all" onkeydown="if(event.key==='Enter'){this.form.submit();}" autocomplete="off" />
+          <button type="submit" class="absolute right-1 top-1/2 -translate-y-1/2 p-1.5 hover:bg-base-200 rounded-full transition-colors" aria-label="Pesquisar">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-base-content">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+          </button>
+        </div>
+        <div id="search-results" class="bg-base-100 border border-base-300 rounded-xl shadow-xl max-h-96 overflow-y-auto mt-2">
+        </div>
+      </form>
     </header>
     <div id="alerts-container">
         {{ alerts_html|safe }}
@@ -45,13 +264,17 @@
         {{ sync_html|safe }}
     </div>
     <div class="grid md:grid-cols-2 gap-4">
-      <div class="space-y-4">
+      <div class="space-y-4 calendar-shell" id="calendar-shell">
         {{ calendar_html|safe }}
         {{ controls_html|safe }}
       </div>
-      {{ day_panel_html|safe }}
+      <div id="day-panel" class="day-panel">
+        {{ day_panel_html|safe }}
+      </div>
     </div>
   </div>
+
+    {{ create_event_modal|safe }}
 
   <dialog id="duracao-modal" class="modal">
     <div class="modal-box">
@@ -81,7 +304,513 @@
   </dialog>
 
   {{ duracao_modal_js|safe }}
+  {{ create_event_modal_js|safe }}
   {{ sync_modal_js|safe }}
 </body>
+<script>
+  (function () {
+    function lerCookie(nome) {
+      const match = document.cookie.match(new RegExp('(?:^|; )' + nome.replace(/([.$?*|{}\(\)\[\]\\\/\+^])/g, '\\$1') + '=([^;]*)'));
+      return match ? decodeURIComponent(match[1]) : null;
+    }
+
+    window.restaurarViewAnterior = function restaurarViewAnterior() {
+      const view = lerCookie('agenda_view') || 'month';
+      const date = lerCookie('agenda_date') || new Date().toISOString().slice(0, 10);
+      const calendar = document.getElementById('calendar');
+      const dayPanel = document.getElementById('day-panel');
+
+      document.body.dataset.editMode = 'false';
+      document.body.dataset.showCalendarWithEdit = 'false';
+
+      if (calendar) {
+        calendar.style.display = '';
+      }
+      if (dayPanel) {
+        dayPanel.style.display = 'none';
+      }
+
+      if (window.htmx) {
+        htmx.ajax('GET', '/agenda?view=' + encodeURIComponent(view) + '&date=' + encodeURIComponent(date), {
+          target: '#calendar',
+          swap: 'outerHTML'
+        });
+        return;
+      }
+
+      window.location.href = '/agenda?view=' + encodeURIComponent(view) + '&date=' + encodeURIComponent(date);
+    };
+
+    function sincronizarLayoutPeriodo() {
+      const calendar = document.getElementById('calendar');
+      const shell = document.getElementById('calendar-shell');
+      const dayPanel = document.getElementById('day-panel');
+      const editMode = document.body.dataset.editMode === 'true';
+      const showBoth = document.body.dataset.showCalendarWithEdit === 'true';
+
+      if (!shell) {
+        return;
+      }
+
+      const isPeriodView = !!calendar && !!calendar.dataset.view && ['day', 'week', 'month'].includes(calendar.dataset.view);
+
+      if (showBoth) {
+        shell.classList.remove('calendar-shell-expanded');
+        if (calendar) calendar.style.display = '';
+        if (dayPanel) dayPanel.style.display = '';
+        return;
+      }
+
+      shell.classList.toggle('calendar-shell-expanded', isPeriodView && !editMode);
+
+      if (dayPanel) {
+        dayPanel.style.display = (isPeriodView && !editMode) ? 'none' : '';
+      }
+
+      if (calendar && editMode) {
+        calendar.style.display = 'none';
+      } else if (calendar) {
+        calendar.style.display = '';
+      }
+    }
+
+    function iniciarDragAndDropAgenda() {
+      const areas = document.querySelectorAll('.agenda-drop-zone');
+      const eventos = document.querySelectorAll('.agenda-event');
+
+      let dragOrigin = null;
+
+      eventos.forEach(function (evento) {
+        evento.setAttribute('draggable', 'true');
+
+        evento.addEventListener('dblclick', function (event) {
+          event.preventDefault();
+          const editUrl = evento.dataset.editUrl || '/edit?id=' + encodeURIComponent(evento.dataset.eventId || '0') + '&date=' + encodeURIComponent(evento.dataset.eventDate || '');
+          const dayPanel = document.getElementById('day-panel');
+          const calendar = document.getElementById('calendar');
+
+          document.body.dataset.editMode = 'true';
+          document.body.dataset.showCalendarWithEdit = 'false';
+          if (calendar) {
+            calendar.style.display = 'none';
+          }
+          if (dayPanel) {
+            dayPanel.style.display = '';
+          }
+
+          if (window.htmx) {
+            htmx.ajax('GET', editUrl, { target: '#day-panel', swap: 'innerHTML' });
+            return;
+          }
+
+          window.location.href = editUrl;
+        });
+
+        evento.addEventListener('dragstart', function (event) {
+          dragOrigin = {
+            id: evento.dataset.eventId,
+            date: evento.dataset.eventDate || evento.dataset.dropDate,
+            time: evento.dataset.eventTime || '09:00'
+          };
+          event.dataTransfer.setData('text/plain', JSON.stringify(dragOrigin));
+          event.dataTransfer.effectAllowed = 'move';
+
+          document.querySelectorAll('.agenda-drop-zone').forEach(function (zone) {
+            zone.classList.add('drag-over');
+          });
+        });
+
+        evento.addEventListener('dragend', function () {
+          document.querySelectorAll('.agenda-drop-zone').forEach(function (zone) {
+            zone.classList.remove('drag-over');
+          });
+          dragOrigin = null;
+        });
+      });
+
+      areas.forEach(function (area) {
+        area.addEventListener('dragover', function (event) {
+          event.preventDefault();
+          document.querySelectorAll('.agenda-drop-zone').forEach(function (zone) {
+            zone.classList.remove('drag-over');
+          });
+          area.classList.add('drag-over');
+        });
+
+        area.addEventListener('dragleave', function () {
+          area.classList.remove('drag-over');
+        });
+
+        area.addEventListener('drop', function (event) {
+          event.preventDefault();
+          area.classList.remove('drag-over');
+          try {
+            const payload = JSON.parse(event.dataTransfer.getData('text/plain'));
+            if (!payload || !payload.id) {
+              return;
+            }
+            const targetDate = area.dataset.dropDate || payload.date;
+            const targetHour = area.dataset.dropHour;
+            const targetTime = targetHour !== undefined ? `${String(targetHour).padStart(2, '0')}:00` : (payload.time || '09:00');
+            const targetHasEvents = !!area.querySelector('.agenda-event');
+            if (targetHasEvents) {
+              const confirmar = window.confirm('Deseja mesmo colocar esse evento nesse horário?');
+              if (!confirmar) {
+                return;
+              }
+            }
+
+            const body = new URLSearchParams({
+              id: String(payload.id),
+              date: targetDate,
+              time: targetTime,
+              panel_date: targetDate
+            });
+            fetch('/move', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+              body: body.toString()
+            }).then(function (response) {
+              if (!response.ok) {
+                throw new Error('Falha ao mover evento');
+              }
+              return response.text();
+            }).then(function (html) {
+              const container = document.getElementById('calendar');
+              if (container && html) {
+                container.outerHTML = html;
+                sincronizarLayoutPeriodo();
+                iniciarDragAndDropAgenda();
+              }
+            }).catch(function () {
+              window.location.reload();
+            });
+          } catch (e) {
+            window.location.reload();
+          }
+        });
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function () {
+        sincronizarLayoutPeriodo();
+        iniciarDragAndDropAgenda();
+      });
+    } else {
+      sincronizarLayoutPeriodo();
+      iniciarDragAndDropAgenda();
+    }
+
+    document.addEventListener('htmx:afterSwap', function (event) {
+      const shouldRestore = document.body.dataset.pendingRestore === 'true';
+      if (shouldRestore) {
+        document.body.dataset.pendingRestore = 'false';
+        restaurarViewAnterior();
+        return;
+      }
+      sincronizarLayoutPeriodo();
+      iniciarDragAndDropAgenda();
+    });
+  })();
+
+  // Definir funcoes globais PRIMEIRO
+  window.trocarView = function (view) {
+    console.log('[MENU] Trocando view:', view);
+    const date = new Date().toISOString().slice(0, 10);
+    const calendar = document.getElementById('calendar');
+    const dayPanel = document.getElementById('day-panel');
+
+    if (view === 'day') {
+      if (calendar) calendar.style.display = 'none';
+      if (dayPanel) dayPanel.style.display = '';
+      document.body.dataset.editMode = 'false';
+      document.body.dataset.showCalendarWithEdit = 'false';
+      return;
+    }
+
+    document.body.dataset.editMode = 'false';
+    document.body.dataset.showCalendarWithEdit = 'false';
+    if (calendar) calendar.style.display = '';
+    if (dayPanel) dayPanel.style.display = 'none';
+
+    if (window.htmx) {
+      htmx.ajax('GET', '/agenda?view=' + encodeURIComponent(view) + '&date=' + encodeURIComponent(date), {
+        target: '#calendar',
+        swap: 'outerHTML'
+      });
+    } else {
+      window.location.href = '/agenda?view=' + encodeURIComponent(view) + '&date=' + encodeURIComponent(date);
+    }
+  };
+
+  window.abrirConfig = function () {
+    console.log('[MENU] Abrindo config');
+    const configModal = document.getElementById('config-modal');
+    if (configModal && typeof configModal.showModal === 'function') {
+      configModal.showModal();
+    }
+  };
+
+  // View Menu Dropdown Handler
+  (function () {
+    const menuTrigger = document.getElementById('menu-trigger');
+    const viewMenu = document.getElementById('view-menu');
+    let menuOpenTimeout = null;
+
+    function abrirMenuDropdown() {
+      clearTimeout(menuOpenTimeout);
+      viewMenu.classList.add('active');
+      viewMenu.style.display = 'block';
+    }
+
+    function fecharMenuDropdown() {
+      menuOpenTimeout = setTimeout(function () {
+        viewMenu.classList.remove('active');
+        setTimeout(function () {
+          viewMenu.style.display = 'none';
+        }, 200);
+      }, 100);
+    }
+
+    if (menuTrigger) {
+      menuTrigger.addEventListener('mouseenter', abrirMenuDropdown);
+      menuTrigger.addEventListener('mouseleave', fecharMenuDropdown);
+    }
+
+    if (viewMenu) {
+      viewMenu.addEventListener('mouseenter', abrirMenuDropdown);
+      viewMenu.addEventListener('mouseleave', fecharMenuDropdown);
+    }
+
+    const menuItems = document.querySelectorAll('.dropdown-item');
+    menuItems.forEach(function (item) {
+      item.addEventListener('click', function () {
+        const view = item.getAttribute('data-view');
+        const action = item.getAttribute('data-action');
+
+        if (view) {
+          window.trocarView(view);
+        } else if (action === 'config') {
+          window.abrirConfig();
+        }
+
+        fecharMenuDropdown();
+      });
+    });
+  })();
+
+  // Real-time Search Results
+  (function () {
+    const input = document.getElementById('search-q');
+    const resultsContainer = document.getElementById('search-results');
+    let debounceTimer = null;
+
+    if (!input || !resultsContainer) return;
+
+    function ocultarResultados() {
+      resultsContainer.classList.remove('active');
+      resultsContainer.innerHTML = '';
+    }
+
+    function mostrarMensagem(mensagem, comSpinner) {
+      const spinnerHtml = comSpinner ? '<span class="loading loading-spinner loading-xs mr-2"></span>' : '';
+      resultsContainer.innerHTML = '<div class="p-3 text-sm text-gray-500">' + spinnerHtml + mensagem + '</div>';
+      resultsContainer.classList.add('active');
+    }
+
+    function mostrarResultados(html) {
+      resultsContainer.innerHTML = html || '';
+      if (resultsContainer.innerHTML.trim() === '') {
+        resultsContainer.classList.remove('active');
+      } else {
+        resultsContainer.classList.add('active');
+      }
+    }
+
+    function atualizarFocoTeclado() {
+      const itens = Array.from(resultsContainer.querySelectorAll('.search-result-item'));
+      itens.forEach(function (item, index) {
+        item.setAttribute('tabindex', '-1');
+      });
+      const focado = resultsContainer.querySelector('.search-result-item.focused');
+      if (focado) {
+        focado.focus();
+      }
+    }
+
+    input.addEventListener('keydown', function (e) {
+      const itens = Array.from(resultsContainer.querySelectorAll('.search-result-item'));
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (itens.length === 0) return;
+        const focado = resultsContainer.querySelector('.search-result-item.focused');
+        if (!focado) {
+          itens[0].classList.add('focused');
+          itens[0].focus();
+        } else {
+          const idx = itens.indexOf(focado);
+          focado.classList.remove('focused');
+          const prox = itens[idx + 1];
+          if (prox) {
+            prox.classList.add('focused');
+            prox.focus();
+          } else {
+            focado.classList.add('focused');
+            focado.focus();
+          }
+        }
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const focado = resultsContainer.querySelector('.search-result-item.focused');
+        if (!focado) {
+          input.focus();
+          return;
+        }
+        const idx = itens.indexOf(focado);
+        focado.classList.remove('focused');
+        if (idx <= 0) {
+          input.focus();
+        } else {
+          itens[idx - 1].classList.add('focused');
+          itens[idx - 1].focus();
+        }
+      } else if (e.key === 'Enter') {
+        const focado = resultsContainer.querySelector('.search-result-item.focused');
+        if (focado) {
+          focado.click();
+        }
+      }
+    });
+
+    resultsContainer.addEventListener('keydown', function (e) {
+      const itens = Array.from(resultsContainer.querySelectorAll('.search-result-item'));
+      const focado = resultsContainer.querySelector('.search-result-item.focused');
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (!focado) {
+          if (itens.length > 0) {
+            itens[0].classList.add('focused');
+            itens[0].focus();
+          }
+        } else {
+          const idx = itens.indexOf(focado);
+          focado.classList.remove('focused');
+          const prox = itens[idx + 1];
+          if (prox) {
+            prox.classList.add('focused');
+            prox.focus();
+          } else {
+            focado.classList.add('focused');
+            focado.focus();
+          }
+        }
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (!focado) {
+          if (itens.length > 0) {
+            itens[itens.length - 1].classList.add('focused');
+            itens[itens.length - 1].focus();
+          }
+        } else {
+          const idx = itens.indexOf(focado);
+          focado.classList.remove('focused');
+          if (idx <= 0) {
+            input.focus();
+          } else {
+            itens[idx - 1].classList.add('focused');
+            itens[idx - 1].focus();
+          }
+        }
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (focado) {
+          focado.click();
+        }
+      }
+    });
+
+    input.addEventListener('input', function () {
+      const termo = input.value.trim();
+      clearTimeout(debounceTimer);
+
+      if (termo.length === 0) {
+        mostrarMensagem('Digite um dado de algum evento', false);
+        return;
+      }
+
+      if (termo.length < 4) {
+        mostrarMensagem('Carregando Resultados', true);
+        return;
+      }
+
+      debounceTimer = setTimeout(function () {
+        fetch('/pesquisa?q=' + encodeURIComponent(termo))
+          .then(function (res) {
+            if (!res.ok) throw new Error('Erro na pesquisa');
+            return res.text();
+          })
+          .then(function (html) {
+            mostrarResultados(html);
+            atualizarFocoTeclado();
+          })
+          .catch(function () {
+            ocultarResultados();
+          });
+      }, 250);
+    });
+
+    // Click handler for search results
+    resultsContainer.addEventListener('click', function (e) {
+      const item = e.target.closest('.search-result-item');
+      if (!item) return;
+
+      const eventId = item.getAttribute('data-event-id');
+      const eventDate = item.getAttribute('data-event-date');
+      const editUrl = item.getAttribute('data-edit-url') || ('/edit?id=' + encodeURIComponent(eventId || '0') + '&date=' + encodeURIComponent(eventDate || ''));
+
+      // Hide results and return to no-search state
+      ocultarResultados();
+      input.value = '';
+
+      const calendar = document.getElementById('calendar');
+      const dayPanel = document.getElementById('day-panel');
+      const isMonthView = !!calendar && calendar.style.display !== 'none' && (!dayPanel || dayPanel.style.display === 'none');
+
+      if (isMonthView) {
+        // Move to the event's day in month view
+        if (eventDate) {
+          if (window.htmx) {
+            htmx.ajax('GET', '/agenda?view=month&date=' + encodeURIComponent(eventDate), {
+              target: '#calendar',
+              swap: 'outerHTML'
+            });
+          } else {
+            window.location.href = '/agenda?view=month&date=' + encodeURIComponent(eventDate);
+          }
+        }
+      } else {
+        // Show edit form for the selected event, keeping calendar visible
+        document.body.dataset.editMode = 'true';
+        document.body.dataset.showCalendarWithEdit = 'true';
+        if (dayPanel) {
+          dayPanel.style.display = '';
+          if (window.htmx) {
+            htmx.ajax('GET', editUrl, { target: '#day-panel', swap: 'innerHTML' });
+          } else {
+            window.location.href = editUrl;
+          }
+        }
+      }
+    });
+
+    // Hide results when clicking outside
+    document.addEventListener('click', function (e) {
+      if (!resultsContainer.contains(e.target) && e.target !== input && !input.contains(e.target)) {
+        ocultarResultados();
+      }
+    });
+  })();
+</script>
 <script src="/js/jquery-script.js"></script>
 </html>

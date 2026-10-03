@@ -1,20 +1,20 @@
-const lembretesSchema = {
+export const lembretesSchema = {
   title: 'lembretes',
   version: 0,
+  primaryKey: 'id',
   type: 'object',
   properties: {
-    id: { type: 'string', primary: true },
-    eventoId: { type: 'string' },
-    ocorrenciaId: { type: 'string' },
-    tipo: { type: 'string' },
-    canal: { type: 'string' },
+    id: { type: 'string', maxLength: 64 },
+    eventoId: { type: 'string', maxLength: 64 },
+    ocorrenciaId: { type: 'string', maxLength: 64 },
+    tipo: { type: 'string', maxLength: 32 },
+    canal: { type: 'string', maxLength: 32 },
     enviado: { type: 'boolean', default: false },
-    enviadoEm: { type: 'string', format: 'date-time' },
-    userId: { type: 'string' },
-    createdAt: { type: 'string', format: 'date-time' },
-    updatedAt: { type: 'string', format: 'date-time' }
+    enviadoEm: { type: 'string', format: 'date-time', maxLength: 32 },
+    userId: { type: 'string', maxLength: 64 },
+    createdAt: { type: 'string', format: 'date-time', maxLength: 32 },
+    updatedAt: { type: 'string', format: 'date-time', maxLength: 32 }
   },
-  required: ['id', 'eventoId', 'tipo', 'createdAt', 'updatedAt']
+  required: ['id', 'eventoId', 'tipo', 'createdAt', 'updatedAt'],
+  indexes: ['eventoId', 'ocorrenciaId', 'enviado']
 };
-
-module.exports = { lembretesSchema };

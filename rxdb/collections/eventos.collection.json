@@ -23,7 +23,7 @@
     "cancelado": "boolean",
     "concluido": "boolean",
     "userId": "string",
-    "deleted": "boolean",
+    "removido": "boolean",
     "createdAt": "date-time",
     "updatedAt": "date-time"
   }
