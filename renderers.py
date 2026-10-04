@@ -918,6 +918,45 @@ DURACAO_MODAL_JS = """
 """
 
 
+def render_login_page():
+  return """
+  <!doctype html>
+  <html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Agenda - autenticação</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-base-200 min-h-screen flex items-center justify-center p-6">
+    <div class="card w-full max-w-md bg-base-100 shadow-xl">
+      <div class="card-body gap-4">
+        <div class="text-center">
+          <h1 class="text-2xl font-bold">Entrar na agenda</h1>
+          <p class="text-sm text-base-content/70">Selecione o usuário para continuar.</p>
+        </div>
+        <form method="GET" action="/auth" class="space-y-3">
+          <label class="form-control">
+            <span class="label-text">ID do usuário</span>
+            <input name="user_id" type="text" class="input input-bordered w-full" placeholder="ex.: u-42" required>
+          </label>
+          <label class="form-control">
+            <span class="label-text">E-mail do Google</span>
+            <input name="email" type="email" class="input input-bordered w-full" placeholder="usuario@exemplo.com" required>
+          </label>
+          <label class="form-control">
+            <span class="label-text">Google user ID</span>
+            <input name="google_user_id" type="text" class="input input-bordered w-full" placeholder="google-123">
+          </label>
+          <button class="btn btn-primary w-full" type="submit">Entrar</button>
+        </form>
+      </div>
+    </div>
+  </body>
+  </html>
+  """
+
+
 def render_page(sel, view="month"):
   view_name = (view or "month").lower()
   if view_name in ("day", "week"):

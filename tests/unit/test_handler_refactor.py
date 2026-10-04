@@ -123,6 +123,34 @@ class HandlerRefactorTests(unittest.TestCase):
     def test_server_imports_same_handler_class(self):
         self.assertIs(server.Handler, Handler)
 
+    def test_active_user_cookie_is_resolved(self):
+        handler = self._make_handler()
+        handler.headers = {"Cookie": "agenda_user_id=u-42; agenda_user_email=alice@example.com; agenda_google_user_id=google-42"}
+        self.assertEqual(handler._get_active_user(), {
+            "usuario_id": "u-42",
+            "email": "alice@example.com",
+            "google_user_id": "google-42",
+        })
+
+    def test_eventos_are_filtered_by_active_user(self):
+        import agenda
+        original_db = agenda.DB
+        original_active = getattr(agenda, "_ACTIVE_USER", None)
+        try:
+            temp_path = ROOT_DIR / "tests" / "unit" / "tmp_eventos_multiuser.json"
+            agenda.DB = temp_path
+            agenda._ACTIVE_USER = {"usuario_id": "u-42", "email": "alice@example.com", "google_user_id": "google-42"}
+            agenda.salvar([
+                {"id": 1, "titulo": "Evento do Alice", "usuario_id": "u-42", "inicio": "2026-08-25 09:00"},
+                {"id": 2, "titulo": "Evento do Bob", "usuario_id": "u-99", "inicio": "2026-08-25 10:00"},
+            ])
+            self.assertEqual([e["id"] for e in agenda.carregar()], [1])
+        finally:
+            agenda.DB = original_db
+            agenda._ACTIVE_USER = original_active
+            if temp_path.exists():
+                temp_path.unlink()
+
 
 class HandlerLogicTests(unittest.TestCase):
     def test_parse_alerts_minutes_filters_and_sorts(self):

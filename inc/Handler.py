@@ -75,11 +75,34 @@ class Handler(BaseHTTPRequestHandler):
 			return {}
 		return {k: v.value for k, v in jar.items()}
 
+	def _get_active_user(self):
+		cookies = self._read_cookies()
+		user_id = cookies.get("agenda_user_id") or cookies.get("user_id")
+		email = cookies.get("agenda_user_email") or cookies.get("user_email")
+		google_user_id = cookies.get("agenda_google_user_id") or cookies.get("google_user_id")
+		if not any([user_id, email, google_user_id]):
+			return None
+		user = {}
+		if user_id:
+			user["usuario_id"] = user_id
+		if email:
+			user["email"] = email
+		if google_user_id:
+			user["google_user_id"] = google_user_id
+		if not user.get("usuario_id") and email:
+			user["usuario_id"] = email
+		return user
+
 	def _set_cookie(self, name, value, *, path="/", max_age=31536000):
 		self.send_header(
 			"Set-Cookie",
 			f"{name}={value}; Path={path}; Max-Age={max_age}; SameSite=Lax"
 		)
+
+	def _redirect(self, location):
+		self.send_response(302)
+		self.send_header("Location", location)
+		self.end_headers()
 
 	def _send(self, corpo, status=200, cookies=None):
 		dados = corpo.encode("utf-8")
@@ -198,8 +221,38 @@ class Handler(BaseHTTPRequestHandler):
 		u = urlparse(self.path)
 		q = parse_qs(u.query)
 		cookies = self._read_cookies()
+		if hasattr(self.agenda, "set_active_user"):
+			self.agenda.set_active_user(self._get_active_user())
 
 		try:
+			if u.path in {"/auth", "/login", "/logout"}:
+				if u.path == "/logout":
+					self.send_response(302)
+					for name in ("agenda_user_id", "agenda_user_email", "agenda_google_user_id"):
+						self._set_cookie(name, "", max_age=0)
+					self.send_header("Location", "/auth")
+					self.end_headers()
+					if hasattr(self.agenda, "clear_active_user"):
+						self.agenda.clear_active_user()
+					return
+				if q.get("user_id") or q.get("email") or q.get("google_user_id"):
+					cookies_to_set = {}
+					if q.get("user_id", [""])[0]:
+						cookies_to_set["agenda_user_id"] = q.get("user_id", [""])[0]
+					if q.get("email", [""])[0]:
+						cookies_to_set["agenda_user_email"] = q.get("email", [""])[0]
+					if q.get("google_user_id", [""])[0]:
+						cookies_to_set["agenda_google_user_id"] = q.get("google_user_id", [""])[0]
+					self.send_response(302)
+					for name, value in cookies_to_set.items():
+						self._set_cookie(name, value)
+					self.send_header("Location", "/")
+					self.end_headers()
+					if hasattr(self.agenda, "set_active_user"):
+						self.agenda.set_active_user(cookies_to_set)
+					return
+				self._send(renderers.render_login_page())
+				return
 			if u.path.startswith("/js/"):
 				self._serve_static_js(u.path.lstrip("/"))
 				return

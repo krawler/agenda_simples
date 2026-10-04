@@ -44,6 +44,7 @@ DATA_FMT = "%Y-%m-%d"
 ALERTAS_MIN = [60, 30, 15]  # 1h, 30min, 15min antes
 ALERTA_MIN = 60  # Minutos de antecedência para notificações (usado pelo notificador)
 REPEATS = ("none", "daily", "weekdays", "weekly", "monthly")
+_ACTIVE_USER = None
 
 # Google Calendar integration
 GOOGLE_CREDENTIALS_FILE = resolve_data_path("credentials.json")
@@ -67,14 +68,107 @@ SCOPES = ['https://www.googleapis.com/auth/calendar']
 
 
 # ---------------------------------------------------------------- persistencia
+
+def get_active_user():
+    if not _ACTIVE_USER:
+        return None
+    if not isinstance(_ACTIVE_USER, dict):
+        return None
+    return {k: v for k, v in _ACTIVE_USER.items() if v not in (None, "")}
+
+
+def set_active_user(user):
+    global _ACTIVE_USER
+    if not user:
+        _ACTIVE_USER = None
+        return None
+    normalized = {}
+    if isinstance(user, dict):
+        for key in ("usuario_id", "user_id", "id", "email", "google_user_id", "google_id"):
+            value = user.get(key)
+            if value not in (None, ""):
+                normalized[key] = value
+    if "usuario_id" not in normalized and "email" in normalized:
+        normalized["usuario_id"] = normalized["email"]
+    _ACTIVE_USER = normalized or None
+    return get_active_user()
+
+
+def clear_active_user():
+    global _ACTIVE_USER
+    _ACTIVE_USER = None
+
+
+def _current_user_id():
+    user = get_active_user()
+    if not user:
+        return None
+    for key in ("usuario_id", "user_id", "id", "email"):
+        value = user.get(key)
+        if value not in (None, ""):
+            return value
+    return None
+
+
+def _normalizar_evento_usuario(evento, usuario=None):
+    if not isinstance(evento, dict):
+        return evento
+    user = get_active_user() if usuario is None else usuario
+    if not user:
+        return evento
+    user_id = user.get("usuario_id") or user.get("user_id") or user.get("id") or user.get("email")
+    if user_id not in (None, ""):
+        evento["usuario_id"] = user_id
+    if user.get("email"):
+        evento["usuario_email"] = user["email"]
+    if user.get("google_user_id"):
+        evento["google_user_id"] = user["google_user_id"]
+    return evento
+
+
+def _filtrar_eventos_por_usuario(eventos, usuario=None):
+    user = get_active_user() if usuario is None else usuario
+    if not user:
+        return list(eventos)
+    user_id = user.get("usuario_id") or user.get("user_id") or user.get("id") or user.get("email")
+    if user_id in (None, ""):
+        return list(eventos)
+    filtrados = []
+    for evento in eventos:
+        if not isinstance(evento, dict):
+            continue
+        ev_user_id = evento.get("usuario_id") or evento.get("user_id")
+        if ev_user_id in (None, "") or str(ev_user_id) == str(user_id):
+            item = dict(evento)
+            item["usuario_id"] = user_id
+            filtrados.append(item)
+    return filtrados
+
+
 def carregar():
+    eventos = []
     if DB.exists():
-        return json.loads(DB.read_text(encoding="utf-8"))
-    return []
+        eventos = json.loads(DB.read_text(encoding="utf-8"))
+    return _filtrar_eventos_por_usuario(eventos)
 
 
 def salvar(eventos):
-    DB.write_text(json.dumps(eventos, ensure_ascii=False, indent=2), encoding="utf-8")
+    lista = []
+    user = get_active_user()
+    user_id = _current_user_id()
+    for evento in eventos:
+        item = dict(evento)
+        if user:
+            ev_user_id = item.get("usuario_id") or item.get("user_id")
+            if ev_user_id not in (None, "") and str(ev_user_id) != str(user_id):
+                continue
+            item["usuario_id"] = user_id
+            if user.get("email"):
+                item["usuario_email"] = user["email"]
+            if user.get("google_user_id"):
+                item["google_user_id"] = user["google_user_id"]
+        lista.append(item)
+    DB.write_text(json.dumps(lista, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def proximo_id(eventos):
