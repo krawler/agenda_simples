@@ -921,35 +921,108 @@ DURACAO_MODAL_JS = """
 def render_login_page():
   return """
   <!doctype html>
-  <html lang="pt-BR">
+  <html lang="pt-BR" data-theme="light">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Agenda - autenticação</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" rel="stylesheet">
+    <style>
+      body {
+        background: linear-gradient(135deg, rgba(248,250,252,1), rgba(226,232,240,0.9));
+      }
+      .auth-shell {
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 1.5rem;
+      }
+      .auth-card {
+        width: min(100%, 28rem);
+        border-radius: 1.25rem;
+        border: 1px solid rgba(148,163,184,0.22);
+        background: rgba(255,255,255,0.86);
+        box-shadow: 0 18px 45px rgba(15,23,42,0.12);
+        backdrop-filter: blur(8px);
+      }
+      .auth-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 3rem;
+        width: 3rem;
+        border-radius: 9999px;
+        background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+        color: white;
+        box-shadow: 0 8px 20px rgba(59,130,246,0.25);
+      }
+    </style>
+    <script>
+      (function() {
+        var t = localStorage.getItem('tema');
+        if (t) document.documentElement.setAttribute('data-theme', t);
+      })();
+    </script>
   </head>
-  <body class="bg-base-200 min-h-screen flex items-center justify-center p-6">
-    <div class="card w-full max-w-md bg-base-100 shadow-xl">
-      <div class="card-body gap-4">
-        <div class="text-center">
-          <h1 class="text-2xl font-bold">Entrar na agenda</h1>
-          <p class="text-sm text-base-content/70">Selecione o usuário para continuar.</p>
+  <body>
+    <div class="auth-shell">
+      <div class="auth-card card bg-base-100 shadow-xl border border-base-300">
+        <div class="card-body p-6 sm:p-8">
+          <div class="flex flex-col items-center text-center gap-3 mb-2">
+            <div class="auth-badge">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-6 w-6">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75A4.5 4.5 0 0 0 12 2.25a4.5 4.5 0 0 0-4.5 4.5v3.75m9 0H7.5a2.25 2.25 0 0 0-2.25 2.25v6.75A2.25 2.25 0 0 0 7.5 21h9a2.25 2.25 0 0 0 2.25-2.25v-6.75A2.25 2.25 0 0 0 16.5 10.5Z" />
+              </svg>
+            </div>
+            <div>
+              <h1 class="text-2xl font-bold tracking-tight">Entrar na agenda</h1>
+              <p class="text-sm text-base-content/70 mt-1">Selecione o usuário e continue com o calendário.</p>
+            </div>
+          </div>
+
+          <form method="GET" action="/auth" class="space-y-4 mt-2">
+            <label class="form-control">
+              <span class="label-text text-sm font-medium mb-2">ID do usuário</span>
+              <input name="user_id" type="text" class="input input-bordered w-full rounded-xl" placeholder="ex.: u-42" required>
+            </label>
+
+            <label class="form-control">
+              <span class="label-text text-sm font-medium mb-2">E-mail do Google</span>
+              <input name="email" type="email" class="input input-bordered w-full rounded-xl" placeholder="usuario@exemplo.com" required>
+            </label>
+
+            <label class="form-control">
+              <span class="label-text text-sm font-medium mb-2">Google user ID</span>
+              <input name="google_user_id" type="text" class="input input-bordered w-full rounded-xl" placeholder="google-123">
+            </label>
+
+            <button class="btn btn-primary w-full rounded-xl shadow-md" type="submit">
+              Entrar na agenda
+            </button>
+          </form>
+
+          <div class="mt-4">
+            <button
+              type="button"
+              class="btn btn-outline btn-primary w-full rounded-xl"
+              onclick="window.location.href='/google-login'"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" class="h-5 w-5" aria-hidden="true">
+                <path fill="#EA4335" d="M24 9.5c3.54 0 6.7 1.22 9.2 3.61l6.85-6.85C35.82 2.49 30.34 0 24 0 14.64 0 6.46 5.38 2.52 13.22l7.98 6.2C12.18 14.06 17.52 9.5 24 9.5z"/>
+                <path fill="#4285F4" d="M46.5 24.55c0-1.64-.15-3.22-.43-4.74H24v9h12.7c-.54 2.92-2.2 5.4-4.68 7.07l7.58 5.88c4.41-4.07 7.9-10.08 7.9-17.21z"/>
+                <path fill="#FBBC05" d="M32.02 36.88c-2.16 1.45-4.94 2.31-8.02 2.31-6.48 0-11.96-4.38-13.9-10.27l-8.06 6.26C5.9 42.2 14.04 48 24 48c6.34 0 11.66-2.09 15.55-5.7l-7.53-5.42z"/>
+                <path fill="#34A853" d="M10.1 29.92A14.86 14.86 0 0 1 9.5 24c0-1.61.28-3.16.78-4.64L2.52 13.22A23.94 23.94 0 0 0 0 24c0 3.86.92 7.5 2.52 10.72l7.58-5.8z"/>
+              </svg>
+              Continuar com Google
+            </button>
+          </div>
+
+          <div class="divider text-xs uppercase tracking-[0.2em] text-base-content/50 mt-4 mb-0">Google</div>
+          <div class="text-xs text-base-content/60 text-center">
+            A sessão será usada como identidade do usuário para eventos e sincronização.
+          </div>
         </div>
-        <form method="GET" action="/auth" class="space-y-3">
-          <label class="form-control">
-            <span class="label-text">ID do usuário</span>
-            <input name="user_id" type="text" class="input input-bordered w-full" placeholder="ex.: u-42" required>
-          </label>
-          <label class="form-control">
-            <span class="label-text">E-mail do Google</span>
-            <input name="email" type="email" class="input input-bordered w-full" placeholder="usuario@exemplo.com" required>
-          </label>
-          <label class="form-control">
-            <span class="label-text">Google user ID</span>
-            <input name="google_user_id" type="text" class="input input-bordered w-full" placeholder="google-123">
-          </label>
-          <button class="btn btn-primary w-full" type="submit">Entrar</button>
-        </form>
       </div>
     </div>
   </body>
