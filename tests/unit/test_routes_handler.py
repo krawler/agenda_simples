@@ -161,6 +161,36 @@ class RoutesHandlerTests(unittest.TestCase):
         self.assertTrue(any("agenda_view=week" in str(value) for value in headers))
         self.assertTrue(any("agenda_date=2026-08-26" in str(value) for value in headers))
 
+    def test_get_logout_clears_google_token_and_redirects_to_auth(self):
+        class AgendaLogoutDummy(DummyAgendaMinimal):
+            def __init__(self):
+                super().__init__()
+                self.cleared = False
+                self.token_exists = True
+
+                def exists():
+                    return self.token_exists
+
+                def unlink():
+                    self.token_exists = False
+
+                self.GOOGLE_TOKEN_FILE = type("TokenFile", (), {"exists": staticmethod(exists), "unlink": staticmethod(unlink)})()
+
+            def clear_active_user(self):
+                self.cleared = True
+
+        agenda = AgendaLogoutDummy()
+        Handler.configure(agenda=agenda, render_day_panel=lambda painel, editando=None: f"day:{painel}", render_calendar=lambda y, m, sel: "cal", render_period_view=lambda data, view="day": f"period:{view}:{data}", render_alerts_banner=lambda: "b", render_proximos_eventos_dia=lambda d: "n", render_sync_status=lambda msg, **k: f"sync:{msg}", load_config_template=lambda: "conf", sse_clients=[], sse_lock=__import__("threading").Lock(), restart_state={"value": False}, server_instance={"value": None})
+
+        handler = self._make_handler(method="GET", path="/logout")
+        handler.do_GET()
+
+        statuses = [r for r in handler.responses if r[0] == "status"]
+        self.assertTrue(any(s[1] == 302 for s in statuses))
+        self.assertTrue(any(r[0] == "Location" and r[1] == "/auth" for r in handler.responses))
+        self.assertTrue(agenda.cleared)
+        self.assertFalse(agenda.GOOGLE_TOKEN_FILE.exists())
+
     def test_get_agenda_blank_date_defaults_to_today(self):
         handler = self._make_handler(method="GET", path="/agenda?view=day&date=")
         handler.do_GET()

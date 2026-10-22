@@ -132,6 +132,26 @@ class HandlerRefactorTests(unittest.TestCase):
             "google_user_id": "google-42",
         })
 
+    def test_google_user_profile_is_normalized(self):
+        handler = self._make_handler()
+        profile = {
+            "resourceName": "people/1234567890",
+            "names": [{"displayName": "Alice Souza"}],
+            "emailAddresses": [{"value": "alice@gmail.com"}],
+        }
+
+        normalized = handler._normalize_google_user_profile(profile)
+
+        self.assertEqual(normalized["usuario_id"], "alice@gmail.com")
+        self.assertEqual(normalized["email"], "alice@gmail.com")
+        self.assertEqual(normalized["google_user_id"], "1234567890")
+        self.assertEqual(normalized["nome"], "Alice Souza")
+
+    def test_google_scopes_include_userinfo(self):
+        import agenda
+        self.assertIn("https://www.googleapis.com/auth/userinfo.email", agenda.SCOPES)
+        self.assertIn("https://www.googleapis.com/auth/userinfo.profile", agenda.SCOPES)
+
     def test_eventos_are_filtered_by_active_user(self):
         import agenda
         original_db = agenda.DB
