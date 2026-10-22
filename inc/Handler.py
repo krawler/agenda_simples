@@ -9,6 +9,7 @@ from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
+from inc.logger import log_console, tratar_excecao
 import renderers
 from inc.handler_logic import (
 	build_nearby_events_payload,
@@ -92,6 +93,43 @@ class Handler(BaseHTTPRequestHandler):
 		if not user.get("usuario_id") and email:
 			user["usuario_id"] = email
 		return user
+
+	@staticmethod
+	def _normalize_google_user_profile(profile):
+		if not isinstance(profile, dict):
+			return {}
+		google_user_id = profile.get("id") or profile.get("google_user_id")
+		resource_name = profile.get("resourceName")
+		if resource_name and "/" in resource_name:
+			google_user_id = resource_name.rsplit("/", 1)[-1]
+		if not google_user_id:
+			for item in profile.get("names") or []:
+				if item.get("metadata", {}).get("source", {}).get("type") == "PROFILE":
+					google_user_id = item.get("metadata", {}).get("source", {}).get("id") or google_user_id
+					break
+		nome = profile.get("name") or profile.get("displayName") or ""
+		if not nome:
+			for item in profile.get("names") or []:
+				if item.get("displayName"):
+					nome = item["displayName"]
+					break
+		email = profile.get("email") or profile.get("emailAddress") or ""
+		if not email:
+			for item in profile.get("emailAddresses") or []:
+				if item.get("value"):
+					email = item["value"]
+					break
+		if not email and isinstance(profile.get("user"), dict):
+			email = profile["user"].get("email") or profile["user"].get("emailAddress") or ""
+		usuario_id = email or google_user_id or resource_name or "google-user"
+		normalized = {
+			"usuario_id": usuario_id,
+			"email": email,
+			"google_user_id": google_user_id,
+		}
+		if nome:
+			normalized["nome"] = nome
+		return normalized
 
 	def _set_cookie(self, name, value, *, path="/", max_age=31536000):
 		self.send_header(
@@ -225,11 +263,20 @@ class Handler(BaseHTTPRequestHandler):
 			self.agenda.set_active_user(self._get_active_user())
 
 		try:
+			if u.path == "/google-login":
+				self._login_google()
+				return
 			if u.path in {"/auth", "/login", "/logout"}:
 				if u.path == "/logout":
 					self.send_response(302)
 					for name in ("agenda_user_id", "agenda_user_email", "agenda_google_user_id"):
 						self._set_cookie(name, "", max_age=0)
+					try:
+						token_file = getattr(self.agenda, "GOOGLE_TOKEN_FILE", None)
+						if token_file is not None and hasattr(token_file, "exists") and token_file.exists():
+							token_file.unlink()
+					except Exception:
+						pass
 					self.send_header("Location", "/auth")
 					self.end_headers()
 					if hasattr(self.agenda, "clear_active_user"):
@@ -343,6 +390,9 @@ class Handler(BaseHTTPRequestHandler):
 			if key not in form and values:
 				form[key] = values[0]
 		try:
+			if u.path == "/google-login":
+				self._login_google()
+				return
 			if u.path == "/event":
 				self._criar_evento(form)
 			elif u.path == "/update":
@@ -432,6 +482,7 @@ class Handler(BaseHTTPRequestHandler):
 		self._notificar_clientes()
 
 	def _atualizar_evento(self, form):
+		log_console("INFO", "Atualizando evento")
 		eid = int(form.get("id", "0"))
 		eventos = self.agenda.carregar()
 		e = next((x for x in eventos if x["id"] == eid), None)
@@ -521,6 +572,48 @@ class Handler(BaseHTTPRequestHandler):
 			self._send_json({"ok": True, "msg": "Conexão OK"})
 		except Exception as ex:
 			self._send_json({"ok": False, "msg": str(ex)})
+
+	def _login_google(self):
+		try:
+			if not getattr(self.agenda, "GOOGLE_AVAILABLE", False):
+				raise RuntimeError("Bibliotecas do Google Calendar não instaladas.")
+			if getattr(self.agenda, "GOOGLE_TOKEN_FILE", None) and self.agenda.GOOGLE_TOKEN_FILE.exists():
+				try:
+					from google.oauth2.credentials import Credentials
+					creds = Credentials.from_authorized_user_file(str(self.agenda.GOOGLE_TOKEN_FILE), getattr(self.agenda, "SCOPES", ["https://www.googleapis.com/auth/calendar"]))
+					if not creds or not creds.valid or not set(getattr(self.agenda, "SCOPES", [])).issubset(set(creds.scopes or [])):
+						self.agenda.GOOGLE_TOKEN_FILE.unlink()
+				except Exception:
+					if getattr(self.agenda, "GOOGLE_TOKEN_FILE", None) and self.agenda.GOOGLE_TOKEN_FILE.exists():
+						self.agenda.GOOGLE_TOKEN_FILE.unlink()
+
+			self.agenda.get_google_service()
+
+			from google.oauth2.credentials import Credentials
+			from googleapiclient.discovery import build
+
+			creds = Credentials.from_authorized_user_file(str(self.agenda.GOOGLE_TOKEN_FILE), getattr(self.agenda, "SCOPES", ["https://www.googleapis.com/auth/calendar"]))
+			oauth2 = build("oauth2", "v2", credentials=creds)
+			profile = oauth2.userinfo().get().execute()
+			user = self._normalize_google_user_profile(profile)
+			if not user:
+				raise RuntimeError("Não foi possível recuperar os dados do usuário autenticado.")
+			cookie_values = {
+				"agenda_user_id": user.get("usuario_id", ""),
+				"agenda_user_email": user.get("email", ""),
+				"agenda_google_user_id": user.get("google_user_id", ""),
+			}
+			self.send_response(302)
+			for name, value in cookie_values.items():
+				if value:
+					self._set_cookie(name, value)
+			self.send_header("Location", "/")
+			self.end_headers()
+			if hasattr(self.agenda, "set_active_user"):
+				self.agenda.set_active_user(user)
+			return
+		except Exception as ex:
+			self._send(f"<h1>Erro ao autenticar com Google</h1><p>{ex}</p>", 500)
 
 	def _reautenticar_google(self):
 		try:
