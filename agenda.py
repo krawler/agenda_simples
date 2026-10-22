@@ -33,6 +33,8 @@ from pathlib import Path
 
 from data_paths import migrate_legacy_data_files, resolve_data_path
 
+from inc.logger import capturar_excecoes, log_console
+
 # Garante saida UTF-8 mesmo em consoles Windows (cp1252).
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
@@ -64,7 +66,12 @@ except ImportError:
     GOOGLE_AVAILABLE = False
     RefreshError = Exception  # Fallback para type hints
 
-SCOPES = ['https://www.googleapis.com/auth/calendar']
+SCOPES = [
+    'https://www.googleapis.com/auth/calendar',
+    'https://www.googleapis.com/auth/userinfo.email',
+    'https://www.googleapis.com/auth/userinfo.profile',
+    'openid',
+]
 
 
 # ---------------------------------------------------------------- persistencia
@@ -151,8 +158,9 @@ def carregar():
         eventos = json.loads(DB.read_text(encoding="utf-8"))
     return _filtrar_eventos_por_usuario(eventos)
 
-
+@capturar_excecoes
 def salvar(eventos):
+    log_console("INFO", f"Salvando eventos para o usuário {eventos[0].get('usuario_id')}")
     lista = []
     user = get_active_user()
     user_id = _current_user_id()
@@ -356,17 +364,26 @@ def get_google_service():
     """Autentica e retorna o serviço do Google Calendar."""
     if not GOOGLE_AVAILABLE:
         sys.exit("Bibliotecas do Google Calendar não instaladas. Execute: pip install google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client")
-    
+
     creds = None
     if GOOGLE_TOKEN_FILE.exists():
-        creds = Credentials.from_authorized_user_file(str(GOOGLE_TOKEN_FILE), SCOPES)
-    
+        try:
+            creds = Credentials.from_authorized_user_file(str(GOOGLE_TOKEN_FILE), SCOPES)
+            scopes_necessarias = set(SCOPES)
+            if not creds or not creds.valid or not scopes_necessarias.issubset(set(creds.scopes or [])):
+                if GOOGLE_TOKEN_FILE.exists():
+                    GOOGLE_TOKEN_FILE.unlink()
+                creds = None
+        except Exception:
+            if GOOGLE_TOKEN_FILE.exists():
+                GOOGLE_TOKEN_FILE.unlink()
+            creds = None
+
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             try:
                 creds.refresh(Request())
             except RefreshError as e:
-                # Token expirado ou revogado - remove o token para forçar nova autenticação
                 if GOOGLE_TOKEN_FILE.exists():
                     GOOGLE_TOKEN_FILE.unlink()
                 raise RefreshError("Token de autenticação Google expirado ou revogado. Execute a sincronização novamente para reautenticar.") from e
@@ -376,7 +393,7 @@ def get_google_service():
             flow = InstalledAppFlow.from_client_secrets_file(str(GOOGLE_CREDENTIALS_FILE), SCOPES)
             creds = flow.run_local_server(port=0)
         GOOGLE_TOKEN_FILE.write_text(creds.to_json())
-    
+
     return build('calendar', 'v3', credentials=creds)
 
 
