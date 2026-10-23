@@ -20,3 +20,5 @@ settings.json
 docs/
 node_modules
 backup
+/build/
+/dist/
