@@ -459,20 +459,31 @@ def delete_event_from_google(e):
 def get_google_events(service, time_min=None, time_max=None):
     """Busca eventos do Google Calendar."""
     try:
-        events_result = service.events().list(
-            calendarId=GOOGLE_CALENDAR_ID,
-            timeMin=time_min.isoformat() + 'Z' if time_min else None,
-            timeMax=time_max.isoformat() + 'Z' if time_max else None,
-            singleEvents=True,
-            orderBy='startTime',
-            maxResults=2500
-        ).execute()
-        return events_result.get('items', [])
+        events = []
+        page_token = None
+        while True:
+            request_args = {
+                'calendarId': GOOGLE_CALENDAR_ID,
+                'singleEvents': True,
+                'orderBy': 'startTime',
+                'maxResults': 2500,
+            }
+            if time_min:
+                request_args['timeMin'] = time_min.isoformat() + 'Z'
+            if time_max:
+                request_args['timeMax'] = time_max.isoformat() + 'Z'
+            if page_token:
+                request_args['pageToken'] = page_token
+
+            events_result = service.events().list(**request_args).execute()
+            events.extend(events_result.get('items', []))
+            page_token = events_result.get('nextPageToken')
+            if not page_token:
+                return events
     except RefreshError:
         raise
-    except Exception as ex:
-        print(f"Erro ao buscar eventos do Google Calendar: {ex}")
-        return []
+    except Exception:
+        raise
 
 
 def find_local_event_by_google_id(eventos, google_id):
@@ -556,25 +567,32 @@ def sync_all_to_google(on_progress=None, simulate_error=False):
             continue
 
         # Tenta sincronizar: se tem google_id e ele existe no Google, atualiza; senão cria novo
-        success, action = sync_event_to_google(e)
-        if success:
-            # Só adiciona à lista de exportados se foi CRIADO (não se foi apenas atualizado)
-            # E evita duplicatas por google_id criados nesta sincronização
-            if action == "created":
-                gid = e.get("google_id")
-                if gid and gid not in created_google_ids:
-                    created_google_ids.add(gid)
-                    exportados.append({
-                        "id": e["id"],
-                        "titulo": e["titulo"],
-                        "inicio": e["inicio"],
-                        "google_id": gid,
-                        "repeat": e.get("repeat"),
-                        "until": e.get("until"),
-                        "action": action
-                    })
-        else:
+        try:
+            success, action = sync_event_to_google(e)
+            if success:
+                # Só adiciona à lista de exportados se foi CRIADO (não se foi apenas atualizado)
+                # E evita duplicatas por google_id criados nesta sincronização
+                if action == "created":
+                    gid = e.get("google_id")
+                    if gid and gid not in created_google_ids:
+                        created_google_ids.add(gid)
+                        exportados.append({
+                            "id": e["id"],
+                            "titulo": e["titulo"],
+                            "inicio": e["inicio"],
+                            "google_id": gid,
+                            "repeat": e.get("repeat"),
+                            "until": e.get("until"),
+                            "action": action
+                        })
+            else:
+                progress(f"  Erro ao sincronizar evento {e['id']} ({e['titulo']}): falha na operação com Google Calendar")
+                errors += 1
+        except Exception as ex:
+            progress(f"  Erro ao sincronizar evento {e['id']} ({e['titulo']}): {str(ex)}")
             errors += 1
+        finally:
+            progress(f"  Processado evento {e['id']} ({e['titulo']})")
     
     if exportados or errors > 0:
         salvar(eventos)
@@ -688,7 +706,7 @@ def sync_from_google(on_progress=None, simulate_error=False):
                 "google_id": gid
             })
         except Exception as ex:
-            print(f"Erro ao converter evento do Google: {ex}")
+            progress(f"  Erro ao converter evento do Google ({gid}): {str(ex)}")
             errors += 1
     
     if importados:
@@ -725,8 +743,10 @@ def sync_all_with_progress(on_progress, simulate_error=False):
         capture_progress("Sincronizando com Google Calendar...")
 
     try:
-        exportados, export_errors = sync_all_to_google(on_progress=capture_progress, simulate_error=simulate_error)
+        # Import first so Google events receive their google_id locally before
+        # the export step considers creating anything new.
         importados, import_errors = sync_from_google(on_progress=capture_progress, simulate_error=simulate_error)
+        exportados, export_errors = sync_all_to_google(on_progress=capture_progress, simulate_error=simulate_error)
         
         exportados = _deduplicate_by_google_id(exportados)
         importados = _deduplicate_by_google_id(importados)
@@ -736,7 +756,7 @@ def sync_all_with_progress(on_progress, simulate_error=False):
         capture_progress(msg)
         return msg, exportados, importados, logs
     except RefreshError as e:
-        error_msg = "Não foi possível sincronizar, token de autenticação Google expirado"
+        error_msg = str(e)
         capture_progress(error_msg)
         print(f"Erro de autenticação: {e}")
         return error_msg, [], [], logs
