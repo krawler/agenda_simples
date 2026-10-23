@@ -21,3 +21,5 @@ docs/
 
 /build/
 /dist/
+node_modules/*
+backup/
