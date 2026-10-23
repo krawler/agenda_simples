@@ -459,20 +459,31 @@ def delete_event_from_google(e):
 def get_google_events(service, time_min=None, time_max=None):
     """Busca eventos do Google Calendar."""
     try:
-        events_result = service.events().list(
-            calendarId=GOOGLE_CALENDAR_ID,
-            timeMin=time_min.isoformat() + 'Z' if time_min else None,
-            timeMax=time_max.isoformat() + 'Z' if time_max else None,
-            singleEvents=True,
-            orderBy='startTime',
-            maxResults=2500
-        ).execute()
-        return events_result.get('items', [])
+        events = []
+        page_token = None
+        while True:
+            request_args = {
+                'calendarId': GOOGLE_CALENDAR_ID,
+                'singleEvents': True,
+                'orderBy': 'startTime',
+                'maxResults': 2500,
+            }
+            if time_min:
+                request_args['timeMin'] = time_min.isoformat() + 'Z'
+            if time_max:
+                request_args['timeMax'] = time_max.isoformat() + 'Z'
+            if page_token:
+                request_args['pageToken'] = page_token
+
+            events_result = service.events().list(**request_args).execute()
+            events.extend(events_result.get('items', []))
+            page_token = events_result.get('nextPageToken')
+            if not page_token:
+                return events
     except RefreshError:
         raise
-    except Exception as ex:
-        print(f"Erro ao buscar eventos do Google Calendar: {ex}")
-        return []
+    except Exception:
+        raise
 
 
 def find_local_event_by_google_id(eventos, google_id):
@@ -732,8 +743,10 @@ def sync_all_with_progress(on_progress, simulate_error=False):
         capture_progress("Sincronizando com Google Calendar...")
 
     try:
-        exportados, export_errors = sync_all_to_google(on_progress=capture_progress, simulate_error=simulate_error)
+        # Import first so Google events receive their google_id locally before
+        # the export step considers creating anything new.
         importados, import_errors = sync_from_google(on_progress=capture_progress, simulate_error=simulate_error)
+        exportados, export_errors = sync_all_to_google(on_progress=capture_progress, simulate_error=simulate_error)
         
         exportados = _deduplicate_by_google_id(exportados)
         importados = _deduplicate_by_google_id(importados)
