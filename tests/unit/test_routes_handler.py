@@ -1,5 +1,7 @@
 import io
 import json
+import os
+import tempfile
 import unittest
 from datetime import date
 from pathlib import Path
@@ -7,6 +9,8 @@ import sys
 from unittest.mock import patch
 
 import renderers
+
+import server
 
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -103,6 +107,27 @@ class RoutesHandlerTests(unittest.TestCase):
         self.assertTrue(any(s[1] == 200 for s in statuses))
         self.assertIn(b"PNG", handler.wfile.getvalue()[:8])
 
+    def test_save_env_persists_notificacao_telegram_flag(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env_path = Path(tmpdir) / ".env"
+            env_path.write_text("NOTIFICACAO_EMAIL=true\n", encoding="utf-8")
+            original_env_file = getattr(__import__('inc.Handler', fromlist=['ENV_FILE']), 'ENV_FILE', None)
+            import inc.Handler as handler_module
+            handler_module.ENV_FILE = env_path
+            try:
+                payload = json.dumps({"notificacao_email": True, "notificacao_telegram": True}).encode("utf-8")
+                handler = self._make_handler(method="POST", path="/save-env", body=payload, headers={"Content-Type": "application/json"})
+                handler.do_POST()
+                body = handler.wfile.getvalue().decode("utf-8")
+                self.assertIn('"ok": true', body.lower())
+                texto_env = env_path.read_text(encoding="utf-8")
+                self.assertIn("NOTIFICACAO_EMAIL=true", texto_env)
+                self.assertIn("NOTIFICACAO_TELEGRAM=true", texto_env)
+            finally:
+                if original_env_file is None:
+                    delattr(handler_module, 'ENV_FILE')
+                else:
+                    handler_module.ENV_FILE = original_env_file
     def test_get_agenda_period_view_returns_fragment(self):
         handler = self._make_handler(method="GET", path="/agenda?view=week&date=2026-08-25")
         handler.do_GET()

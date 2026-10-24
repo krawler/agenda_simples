@@ -78,6 +78,12 @@
           </label>
         </div>
         <div class="form-control w-full">
+          <label class="label cursor-pointer flex items-center gap-2">
+            <span class="label-text">Enviar mensagem de alerta pelo Telegram</span>
+            <input type="checkbox" class="checkbox checkbox-primary" id="notificacao-telegram">
+          </label>
+        </div>
+        <div class="form-control w-full">
           <label class="label">
             <span class="label-text">Minutos de antecedência para alertas</span>
           </label>
@@ -409,14 +415,16 @@
     // Semana início segunda
     document.getElementById('semana-inicio-segunda').checked = localStorage.getItem('semanaInicioSegunda') === 'true';
     
-    // Notificação e-mail (lê do .env via endpoint)
+    // Notificação e-mail/Telegram (lê do .env via endpoint)
     fetch('/env-config')
       .then(r => r.json())
       .then(data => {
         document.getElementById('notificacao-email').checked = data.notificacao_email !== false;
+        document.getElementById('notificacao-telegram').checked = data.notificacao_telegram === true;
       })
       .catch(() => {
         document.getElementById('notificacao-email').checked = true;
+        document.getElementById('notificacao-telegram').checked = false;
       });
     
     // Alertas
@@ -468,11 +476,14 @@
     // Semana início segunda
     localStorage.setItem('semanaInicioSegunda', document.getElementById('semana-inicio-segunda').checked);
     
-    // Notificação e-mail (salva no .env via endpoint)
+    // Notificações (salva no .env via endpoint)
     fetch('/save-env', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({notificacao_email: document.getElementById('notificacao-email').checked})
+      body: JSON.stringify({
+        notificacao_email: document.getElementById('notificacao-email').checked,
+        notificacao_telegram: document.getElementById('notificacao-telegram').checked
+      })
     });
     
     // Alertas
