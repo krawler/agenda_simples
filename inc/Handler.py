@@ -236,7 +236,7 @@ class Handler(BaseHTTPRequestHandler):
 				case "/__dev_status":
 					self._send_json({
 						"ok": True,
-						"pid": __import__("os").getpid(),
+						"pid": __import__("os").getpid(), 
 						"restart_em_andamento": self.restart_state["value"],
 						"sse_clients": len(self.sse_clients),
 						"timestamp": time_module.time(),
@@ -485,7 +485,7 @@ class Handler(BaseHTTPRequestHandler):
 		self._notificar_clientes()
   
 	def _salvar_ideia(self, form):
-		"nome = (form.get("nome") or "").strip()
+		nome = (form.get("nome") or "").strip()
 		descricao = (form.get("descricao") or "").strip() or None
 
 		if not nome:
