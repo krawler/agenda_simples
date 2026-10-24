@@ -808,6 +808,7 @@ def monitorar_arquivos():
         agenda.DB,
         Path(__file__).parent / "agenda.py",
         Path(__file__).parent / "server.py",
+        Path(__file__).parent / "inc/Handler.py",
         TEMPLATES_DIR / "config.htm"
     ]
     
@@ -827,8 +828,8 @@ def monitorar_arquivos():
                 if file_timestamps.get(arquivo) != timestamp_atual:
                     file_timestamps[arquivo] = timestamp_atual
                     mudanca_detectada = True
-                if arquivo.suffix.lower() == ".py":
-                  precisa_reiniciar = True
+                    if arquivo.suffix.lower() == ".py":
+                        precisa_reiniciar = True
         
         if mudanca_detectada:
             # Notifica todos os clientes
@@ -846,6 +847,8 @@ def monitorar_arquivos():
                 if server_instance_state["value"] is not None:
                     # Shutdown deve ocorrer fora da thread do servidor.
                     threading.Thread(target=server_instance_state["value"].shutdown, daemon=True).start()
+            else:
+              return  # Apenas notifica clientes SSE, sem reiniciar        
 
 
 def main():
