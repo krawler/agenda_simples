@@ -39,6 +39,9 @@ from renderers import (
     render_page,
     load_config_template,
     eventos_do_dia,
+    dias_com_eventos,
+    WEEKDAYS,
+    MESES,
 )
 from inc.funcoes_agenda import (
     ler_pid_do_arquivo,
