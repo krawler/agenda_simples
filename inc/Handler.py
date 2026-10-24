@@ -40,10 +40,10 @@ class Handler(BaseHTTPRequestHandler):
 	render_sync_status = staticmethod(renderers.render_sync_status)
 	render_page = staticmethod(renderers.render_page)
 	load_config_template = staticmethod(renderers.load_config_template)
-	sse_clients = None
-	sse_lock = None
-	restart_state = None
-	server_instance = None
+	sse_clients = []
+	sse_lock = __import__("threading").Lock()
+	restart_state = {"value": False}
+	server_instance = {"value": None}
 	templates_dir = renderers.TEMPLATES_DIR
 
 	@classmethod
@@ -499,7 +499,7 @@ class Handler(BaseHTTPRequestHandler):
 			ideias.criar_ideia(nome, descricao)
 		except ValueError as exc:
 			self._send(
-				f'<div class="alert alert-error shadow-sm"><span>{esc(str(exc))}</span></div>',
+				f'<div class="alert alert-error shadow-sm"><span>{renderers.esc(str(exc))}</span></div>',
 				400,
 			)
 			return
