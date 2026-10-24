@@ -1,7 +1,10 @@
 import sqlite3
 from pathlib import Path
 
-DB_PATH = Path(__file__).with_name("ideias.db")
+from data_paths import migrate_legacy_data_files, resolve_data_path
+
+migrate_legacy_data_files()
+DB_PATH = resolve_data_path("ideias.db")
 
 
 def _get_connection():

@@ -14,7 +14,30 @@ class TestIdeiasSqlite(unittest.TestCase):
         ideias.init_db()
 
     def tearDown(self):
-        self.temp_dir.cleanup()
+        for suffix in ("", "-journal", "-wal", "-shm"):
+            try:
+                candidate = self.db_path if not suffix else self.db_path.with_name(f"{self.db_path.name}{suffix}")
+                candidate.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+        try:
+            conn = sqlite3.connect(self.db_path)
+            conn.close()
+        except sqlite3.Error:
+            pass
+
+        try:
+            self.temp_dir.cleanup()
+        except PermissionError:
+            try:
+                self.db_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+            try:
+                Path(self.temp_dir.name).rmdir()
+            except OSError:
+                pass
 
     def test_tabela_ideias_existe(self):
         with sqlite3.connect(self.db_path) as conn:
