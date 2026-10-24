@@ -38,6 +38,7 @@ from renderers import (
     render_sync_status,
     render_page,
     load_config_template,
+    eventos_do_dia,
 )
 from inc.funcoes_agenda import (
     ler_pid_do_arquivo,
