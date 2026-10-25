@@ -8,9 +8,6 @@ Uso:
   python server.py            # http://localhost:8000
   python server.py --port 8080
 
-Obs.: Thymeleaf e um motor de templates Java/Spring e nao roda em Python;
-por isso a pagina e servida por este mini servidor Python, mantendo HTMX,
-Tailwind e daisyUI (que sao apenas front-end).
 """
 import argparse
 import calendar as calmod
