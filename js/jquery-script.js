@@ -378,7 +378,7 @@ $(document).ready(function() {
         var detailsLinkHtml = (data.logs && data.logs.length) ? ' <a href="#" class="link link-hover text-xs ml-2" onclick="openSyncDetailsModal(); return false;">Exibir</a>' : '';
         var interruptLinkHtml = ' <a href="#" class="link link-hover text-xs ml-2" onclick="window.interruptSync(); return false;">Interromper</a>';
         var html = '<div class="flex flex-wrap contents gap-2">'
-                  + ' <span class="loading loading-infinity loading-sm"></span>' 
+                  + ' <span class="loading loading-circle loading-sm"></span>' 
                   + '  <span class="text-lg font-semibold">Sincronizando com Google Calendar:</span>'
                   + '<div class="space-y-1 max-h-60 overflow-y-auto">'
                   
@@ -411,7 +411,7 @@ $(document).ready(function() {
         eventSource.close();
         $("#sync-google").prop('disabled', false);
         $("#sync-google").removeClass('skeleton');
-        $(".loading-infinity").hide();
+        $(".loading-circle").hide();
       }
     };
 
