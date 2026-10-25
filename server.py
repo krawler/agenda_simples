@@ -38,7 +38,6 @@ from renderers import (
     render_sync_status,
     render_page,
     load_config_template,
-    eventos_do_dia,
     dias_com_eventos,
     WEEKDAYS,
     MESES,
