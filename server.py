@@ -19,8 +19,7 @@ import time as time_module
 import os
 import sys
 import subprocess
-import signal
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 from pathlib import Path
@@ -118,8 +117,6 @@ def monitorar_arquivos():
                 if server_instance_state["value"] is not None:
                     # Shutdown deve ocorrer fora da thread do servidor.
                     threading.Thread(target=server_instance_state["value"].shutdown, daemon=True).start()
-            else:
-              return  # Apenas notifica clientes SSE, sem reiniciar        
 
 
 def main():
