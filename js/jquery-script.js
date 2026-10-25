@@ -47,6 +47,17 @@ function initNotificacoes() {
     localStorage.setItem('notificacoesNavegador', 'true');
   } else if (Notification.permission === 'denied') {
     localStorage.setItem('notificacoesNavegador', 'false');
+  } else if (Notification.permission === 'default') {
+    // Se ainda não decidiu, solicita automaticamente para habilitar
+    window.solicitarPermissaoNotificacao().then(function(result) {
+      if (result.ok && result.permission === 'granted') {
+        localStorage.setItem('notificacoesNavegador', 'true');
+      } else {
+        localStorage.setItem('notificacoesNavegador', 'false');
+      }
+    }).catch(function() {
+      localStorage.setItem('notificacoesNavegador', 'false');
+    });
   }
 }
 
@@ -200,6 +211,22 @@ function atualizarBannerAlertasSeNecessario(data) {
 
 function verificarEventosProximos() {
   if (!('Notification' in window)) {
+    return;
+  }
+
+  // Se ainda não decidiu, solicita antes de prosseguir
+  if (Notification.permission === 'default') {
+    window.solicitarPermissaoNotificacao().then(function(result) {
+      if (result.ok && result.permission === 'granted') {
+        localStorage.setItem('notificacoesNavegador', 'true');
+        // Reexecuta após conceder
+        verificarEventosProximos();
+      } else {
+        localStorage.setItem('notificacoesNavegador', 'false');
+      }
+    }).catch(function() {
+      localStorage.setItem('notificacoesNavegador', 'false');
+    });
     return;
   }
 
