@@ -453,7 +453,7 @@ class Handler(BaseHTTPRequestHandler):
 		painel_date = self._parse_date(form.get("panel_date"))
 		cal_html = self.render_calendar(painel_date.year, painel_date.month, painel_date)
 		cal_oob = cal_html.replace('id="calendar"', 'id="calendar" hx-swap-oob="true"', 1)
-		self._send(self.render_day_panel(painel_date, editando=eid) + cal_oob)
+		self._send(self.render_day_panel(painel_date, editando=None) + cal_oob)
 		self._notificar_clientes()
 
 	def _remover_evento(self, q):
