@@ -223,6 +223,61 @@ if (window.htmx && htmx.on) {
   });
 }
 
+/**
+ * Agenda alertas para o meio dos eventos baseados em atributos data-* do DOM
+ */
+function scheduleHalfTimeAlerts(root) {
+  try {
+    if (!halfTimeNotificationsEnabled()) {
+      clearHalfTimeAlerts();
+      return;
+    }
+
+    var container = root || document;
+    var items = container.querySelectorAll('[data-occ-iso][data-dur-min]');
+    var now = Date.now();
+    items.forEach(function(node) {
+      var occIso = node.getAttribute('data-occ-iso');
+      var durMin = Number(node.getAttribute('data-dur-min') || 0);
+      if (!occIso || !durMin) return;
+      var start = Date.parse(occIso);
+      if (isNaN(start)) return;
+      var halfMs = start + (durMin * 60000 / 2);
+      var id = node.getAttribute('data-occ-iso') + '|' + durMin;
+      // Se o meio já passou, pula
+      if (halfMs <= now) {
+        return;
+      }
+      // Se timer já agendado, pula
+      if (window.__halfTimeTimers[id]) return;
+      var delay = Math.max(0, halfMs - now);
+      var t = setTimeout(function() {
+        // Dispara notificação
+        try {
+          if (Notification.permission === 'granted' && halfTimeNotificationsEnabled()) {
+            var titulo = node.querySelector('.font-medium a') ? node.querySelector('.font-medium a').textContent.trim() : 'Evento';
+            dispararNotificacao('⏱️ ' + titulo, 'Evento ' + titulo + ' alcançou a metade do tempo', '/favicon.ico');
+          }
+          // Speech synthesis
+          try {
+            if (window.speechSynthesis && halfTimeNotificationsEnabled()) {
+              var utter = new SpeechSynthesisUtterance('Evento ' + (node.textContent || 'evento') + ' alcançou a metade do tempo');
+              utter.volume = 0.5;
+              speechSynthesis.speak(utter);
+            }
+          } catch (e) {}
+        } finally {
+          delete window.__halfTimeTimers[id];
+        }
+      }, delay);
+      window.__halfTimeTimers[id] = t;
+    });
+  } catch (e) {
+    // ignore
+  }
+}
+
+
 $(document).ready(function() {
   var $syncStatus = $("#sync-status");
   var eventSource;
@@ -332,6 +387,110 @@ $(document).ready(function() {
     var minutes = String(date.getMinutes()).padStart(2, '0');
     return day + '/' + month + '/' + year + ' às ' + hours + ':' + minutes;
   }
+
+  /**
+ * Inicializa contadores de alerta e progresso
+ */
+function initAlertCountdowns() {
+  updateAlertCountdowns();
+  updateEventProgress();
+  if (window.__agendaAlertCountdownInterval) {
+    return;
+  }
+  window.__agendaAlertCountdownInterval = setInterval(function() {
+    updateAlertCountdowns();
+    updateEventProgress();
+  }, 1000);
+}
+
+/**
+ * Atualiza contadores regressivos de alerta
+ */
+function updateAlertCountdowns() {
+  var now = Date.now();
+
+  $('.js-alert-countdown').each(function() {
+    var occIso = this.getAttribute('data-occ-iso');
+    if (!occIso) {
+      return;
+    }
+
+    var targetTime = new Date(occIso).getTime();
+    var remainingSeconds = Math.max(0, Math.ceil((targetTime - now) / 1000));
+
+    var hourEl = this.querySelector('.js-cd-h');
+    var minuteEl = this.querySelector('.js-cd-m');
+    var secondEl = this.querySelector('.js-cd-s');
+
+    if (remainingSeconds <= 0) {
+      if (hourEl) {
+        hourEl.textContent = 'Agora';
+        hourEl.setAttribute('aria-label', 'Agora');
+        hourEl.style.setProperty('--value', '0');
+      }
+      if (minuteEl) {
+        minuteEl.textContent = '';
+        minuteEl.setAttribute('aria-label', '');
+        minuteEl.style.setProperty('--value', '0');
+      }
+      if (secondEl) {
+        secondEl.textContent = '';
+        secondEl.setAttribute('aria-label', '');
+        secondEl.style.setProperty('--value', '0');
+      }
+      this.parentElement.parentElement.parentElement.style.display = 'none';
+      return;
+    }
+
+    var hours = Math.floor(remainingSeconds / 3600);
+    var minutes = Math.floor((remainingSeconds % 3600) / 60);
+    var seconds = remainingSeconds % 60;
+
+    if (hourEl) {
+      hourEl.textContent = String(hours).padStart(2, '0');
+      hourEl.setAttribute('aria-label', String(hours));
+      hourEl.style.setProperty('--value', String(hours));
+    }
+    if (minuteEl) {
+      minuteEl.textContent = String(minutes).padStart(2, '0');
+      minuteEl.setAttribute('aria-label', String(minutes));
+      minuteEl.style.setProperty('--value', String(minutes));
+    }
+    if (secondEl) {
+      secondEl.textContent = String(seconds).padStart(2, '0');
+      secondEl.setAttribute('aria-label', String(seconds));
+      secondEl.style.setProperty('--value', String(seconds));
+    }
+  });
+}
+
+/**
+ * Atualiza barras de progresso dos eventos
+ */
+function updateEventProgress() {
+  var now = Date.now();
+  $('.js-event-progress').each(function() {
+    var occIso = this.getAttribute('data-occ-iso');
+    var durMin = Number(this.getAttribute('data-dur-min') || 0);
+    if (!occIso || !durMin) {
+      return;
+    }
+
+    var startTime = new Date(occIso).getTime();
+    if (isNaN(startTime)) {
+      return;
+    }
+
+    var durationMs = durMin * 60 * 1000;
+    var elapsedMs = Math.max(0, now - startTime);
+    var progress = Math.max(0, Math.min(100, Math.round((elapsedMs / durationMs) * 100)));
+
+    this.style.setProperty('--value', String(progress));
+    this.setAttribute('aria-valuenow', String(progress));
+    this.textContent = progress + '%';
+  });
+}
+
 
   function renderSyncEventList(events, mode) {
     var modeLabel = mode === 'importados' ? 'Eventos Importados do Google' : 'Eventos Exportados para o Google';
