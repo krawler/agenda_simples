@@ -196,15 +196,30 @@ def main():
       remover_pid_arquivo_se_for_deste_processo()
 
     if restart_state["value"]:
-      creation_flags = 0
-      if os.name == "nt":
-        creation_flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
-      subprocess.Popen(
-        [sys.executable] + sys.argv,
-        cwd=str(Path(__file__).parent),
-        creationflags=creation_flags,
-      )
-      return
+        # Prepara comando de reinício usando caminho absoluto do script
+        script_path = Path(__file__).resolve()
+        cmd = [sys.executable, str(script_path)] + sys.argv[1:]
+        
+        creation_flags = 0
+        if os.name == "nt":
+            # No Windows, usa CREATE_NEW_PROCESS_GROUP para isolar o novo processo
+            # e DETACHED_PROCESS para não herdar o console (evita problemas de handle)
+            creation_flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+        
+        try:
+            # Redireciona stdout/stderr para evitar herança de handles que podem travar o restart
+            subprocess.Popen(
+                cmd,
+                cwd=str(script_path.parent),
+                creationflags=creation_flags,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True if hasattr(os, 'setsid') else False,
+            )
+            print("[live-refresh] Novo processo iniciado com sucesso.")
+        except Exception as e:
+            print(f"[live-refresh] Falha ao reiniciar: {e}")
+        return
 
 
 if __name__ == "__main__":
